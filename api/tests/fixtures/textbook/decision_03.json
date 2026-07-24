@@ -1,0 +1,20 @@
+{
+  "_source": "Taha, Operations Research: An Introduction - investment decision under uncertainty",
+  "request": {
+    "alternatives": ["A1", "A2", "A3"],
+    "states": ["S1", "S2", "S3"],
+    "payoff": [
+      [5, 10, 18],
+      [8, 7, 9],
+      [21, 3, -3]
+    ],
+    "criterion": "all",
+    "hurwicz_alpha": 0.5
+  },
+  "expect": {
+    "hurwicz_payoff": 11.5,
+    "hurwicz_best": "A1",
+    "laplace_payoff": 11.0,
+    "laplace_best": "A1"
+  }
+}

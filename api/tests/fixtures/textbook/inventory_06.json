@@ -1,0 +1,9 @@
+{
+  "request": {
+    "model": "dynamic_lot_sizing",
+    "demand_periods": [10, 20, 30, 40, 20],
+    "S": 100,
+    "H": 1
+  },
+  "expect": {"TC": 300.0, "num_orders": 2.0}
+}

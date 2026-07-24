@@ -1,0 +1,19 @@
+{
+  "_source": "Gambler's ruin, n=4, p=q=0.5 (classic absorbing-chain example, Hillier & Lieberman / Taha)",
+  "request": {
+    "states": ["0", "1", "2", "3", "4"],
+    "transition": [
+      [1.0, 0.0, 0.0, 0.0, 0.0],
+      [0.5, 0.0, 0.5, 0.0, 0.0],
+      [0.0, 0.5, 0.0, 0.5, 0.0],
+      [0.0, 0.0, 0.5, 0.0, 0.5],
+      [0.0, 0.0, 0.0, 0.0, 1.0]
+    ],
+    "initial": [0.0, 0.0, 1.0, 0.0, 0.0],
+    "steps": 10
+  },
+  "expect": {
+    "absorption_from_2": { "0": 0.5, "4": 0.5 },
+    "expected_steps_from_2": 4.0
+  }
+}

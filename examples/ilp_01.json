@@ -1,0 +1,10 @@
+{
+  "sense": "max",
+  "objective": { "x": 3, "y": 2 },
+  "constraints": [
+    { "id": "c1", "coeffs": { "x": 2, "y": 1 }, "sense": "<=", "rhs": 10 },
+    { "id": "c2", "coeffs": { "x": 1, "y": 2 }, "sense": "<=", "rhs": 8 }
+  ],
+  "integer_vars": ["x", "y"],
+  "include_graph": true
+}

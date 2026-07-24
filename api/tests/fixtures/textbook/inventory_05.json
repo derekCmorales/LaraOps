@@ -1,0 +1,4 @@
+{
+  "request": {"model": "newsvendor", "mean_demand": 100, "std_demand": 20, "Cu": 8, "Co": 2},
+  "expect": {"critical_ratio": 0.8, "Q_star": 116.83242467145828}
+}

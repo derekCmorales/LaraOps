@@ -1,0 +1,16 @@
+{
+  "_source": "Rock-Paper-Scissors zero-sum game (classic symmetric no-saddle mixed-strategy example)",
+  "request": {
+    "row_strategies": ["Rock", "Paper", "Scissors"],
+    "col_strategies": ["Rock", "Paper", "Scissors"],
+    "payoff": [
+      [0, -1, 1],
+      [1, 0, -1],
+      [-1, 1, 0]
+    ]
+  },
+  "expect": {
+    "game_value": 0.0,
+    "p": { "Rock": 0.3333333333, "Paper": 0.3333333333, "Scissors": 0.3333333333 }
+  }
+}

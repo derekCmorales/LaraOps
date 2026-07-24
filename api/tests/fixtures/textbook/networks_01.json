@@ -1,0 +1,17 @@
+{
+  "_source": "Min-cost flow / transshipment: 2 plants -> 1 warehouse (transship) -> 2 markets",
+  "request": {
+    "problem": "transshipment",
+    "nodes": ["S1", "S2", "T", "D1", "D2"],
+    "node_supply": { "S1": 50, "S2": 40, "T": 0, "D1": -30, "D2": -60 },
+    "edges": [
+      { "source": "S1", "target": "T", "weight": 2, "capacity": 60 },
+      { "source": "S2", "target": "T", "weight": 3, "capacity": 60 },
+      { "source": "T", "target": "D1", "weight": 1, "capacity": 50 },
+      { "source": "T", "target": "D2", "weight": 1, "capacity": 70 }
+    ]
+  },
+  "expect": {
+    "total_cost": 310.0
+  }
+}

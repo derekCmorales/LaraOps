@@ -1,0 +1,9 @@
+{
+  "demand": [100, 120, 110, 130],
+  "initial_workforce": 10,
+  "production_per_worker": 10,
+  "cost_hire": 500,
+  "cost_fire": 800,
+  "cost_hold": 2,
+  "strategy": "level"
+}

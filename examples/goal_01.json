@@ -1,0 +1,14 @@
+{
+  "goals": [
+    {
+      "id": "g1",
+      "coeffs": {
+        "x": 1
+      },
+      "sense": "=",
+      "target": 10,
+      "weight_pos": 1,
+      "weight_neg": 1
+    }
+  ]
+}

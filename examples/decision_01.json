@@ -1,0 +1,11 @@
+{
+  "alternatives": ["A", "B", "C"],
+  "states": ["s1", "s2", "s3"],
+  "payoff": [
+    [10, 5, 2],
+    [8, 7, 6],
+    [4, 9, 12]
+  ],
+  "probabilities": [0.3, 0.5, 0.2],
+  "criterion": "all"
+}

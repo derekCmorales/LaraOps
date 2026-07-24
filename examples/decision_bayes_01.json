@@ -1,0 +1,17 @@
+{
+  "mode": "bayes",
+  "bayes": {
+    "actions": ["build", "no"],
+    "states": ["high", "low"],
+    "prior": [0.4, 0.6],
+    "payoff": [
+      [100, -20],
+      [0, 0]
+    ],
+    "signals": ["good", "bad"],
+    "likelihood": [
+      [0.7, 0.2],
+      [0.3, 0.8]
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "request": {
+    "series": [10, 14, 8, 12, 11, 15, 9, 13, 12, 16, 10, 14],
+    "methods": ["holt_winters_additive"],
+    "alpha": 0.3,
+    "beta": 0.1,
+    "gamma": 0.2,
+    "seasonality": 4,
+    "horizon": 4
+  },
+  "expect": {
+    "horizon": 4,
+    "seasonality": 4
+  }
+}

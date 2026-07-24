@@ -1,0 +1,10 @@
+{
+  "request": {
+    "alternatives": ["expand", "status"],
+    "states": ["good", "poor"],
+    "payoff": [[100, -20], [40, 10]],
+    "probabilities": [0.6, 0.4],
+    "criterion": "expected_value"
+  },
+  "expect": {"EV": 52.0}
+}

@@ -1,0 +1,16 @@
+{
+  "_source": "3x2 game with a strictly dominated row strategy, resolved by dominance + 2x2 mixed strategy",
+  "request": {
+    "row_strategies": ["R1", "R2", "R3"],
+    "col_strategies": ["C1", "C2"],
+    "payoff": [
+      [3, 1],
+      [0, 0],
+      [2, 4]
+    ]
+  },
+  "expect": {
+    "game_value": 2.5,
+    "eliminated_row": "R2"
+  }
+}

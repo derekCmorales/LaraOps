@@ -1,0 +1,13 @@
+{
+  "request": {
+    "series": [10, 12, 13, 12, 14, 16, 15, 17, 18, 16, 19, 21],
+    "methods": ["holt", "linear_trend"],
+    "alpha": 0.4,
+    "beta": 0.3,
+    "horizon": 2
+  },
+  "expect": {
+    "has_holt": true,
+    "has_bias_column": true
+  }
+}

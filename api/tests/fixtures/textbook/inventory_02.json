@@ -1,0 +1,13 @@
+{
+  "request": {
+    "D": 10000,
+    "S": 20,
+    "i": 0.2,
+    "discounts": [
+      {"min_qty": 0, "unit_cost": 5.0},
+      {"min_qty": 500, "unit_cost": 4.75},
+      {"min_qty": 1000, "unit_cost": 4.5}
+    ]
+  },
+  "expect": {"best_C": 4.5}
+}

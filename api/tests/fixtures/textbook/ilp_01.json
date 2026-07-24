@@ -1,0 +1,16 @@
+{
+  "request": {
+    "sense": "max",
+    "objective": {"x1": 8, "x2": 5},
+    "constraints": [
+      {"id": "c1", "coeffs": {"x1": 1, "x2": 1}, "sense": "<=", "rhs": 6},
+      {"id": "c2", "coeffs": {"x1": 9, "x2": 5}, "sense": "<=", "rhs": 45}
+    ],
+    "integer_vars": ["x1", "x2"]
+  },
+  "expect": {
+    "variables": {"x1": 5.0, "x2": 0.0},
+    "objective_value": 40.0,
+    "lp_relaxation_objective": 41.25
+  }
+}

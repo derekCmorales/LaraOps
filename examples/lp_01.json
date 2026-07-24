@@ -1,0 +1,9 @@
+{
+  "sense": "max",
+  "objective": {"x1": 3, "x2": 2},
+  "constraints": [
+    {"id": "c1", "coeffs": {"x1": 2, "x2": 1}, "sense": "<=", "rhs": 100},
+    {"id": "c2", "coeffs": {"x1": 1, "x2": 1}, "sense": "<=", "rhs": 80},
+    {"id": "c3", "coeffs": {"x1": 1, "x2": 0}, "sense": "<=", "rhs": 40}
+  ]
+}

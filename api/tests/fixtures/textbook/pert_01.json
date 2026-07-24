@@ -1,0 +1,15 @@
+{
+  "request": {
+    "mode": "cpm",
+    "activities": [
+      {"id": "A", "predecessors": [], "duration": 3},
+      {"id": "B", "predecessors": ["A"], "duration": 4},
+      {"id": "C", "predecessors": ["A"], "duration": 2},
+      {"id": "D", "predecessors": ["B", "C"], "duration": 5}
+    ]
+  },
+  "expect": {
+    "project_duration": 12.0,
+    "critical_path": ["A", "B", "D"]
+  }
+}

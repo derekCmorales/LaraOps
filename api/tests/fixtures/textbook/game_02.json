@@ -1,0 +1,11 @@
+{
+  "request": {
+    "row_strategies": ["R1", "R2"],
+    "col_strategies": ["C1", "C2"],
+    "payoff": [[4, 2], [3, 1]]
+  },
+  "expect": {
+    "game_value": 2.0,
+    "pure": true
+  }
+}

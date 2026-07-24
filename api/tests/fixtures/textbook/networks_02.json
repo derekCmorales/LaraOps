@@ -1,0 +1,18 @@
+{
+  "_source": "TSP, 5 cities, symmetric distance matrix (Held-Karp exact optimum = 90)",
+  "request": {
+    "problem": "tsp",
+    "nodes": ["A", "B", "C", "D", "E"],
+    "distance_matrix": [
+      [0, 10, 15, 20, 10],
+      [10, 0, 35, 25, 20],
+      [15, 35, 0, 30, 15],
+      [20, 25, 30, 0, 25],
+      [10, 20, 15, 25, 0]
+    ],
+    "tsp_method": "exact"
+  },
+  "expect": {
+    "tour_length": 90.0
+  }
+}

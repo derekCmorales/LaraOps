@@ -1,0 +1,38 @@
+{
+  "problem": "shortest_path",
+  "nodes": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "edges": [
+    {
+      "source": "A",
+      "target": "B",
+      "weight": 1
+    },
+    {
+      "source": "A",
+      "target": "C",
+      "weight": 4
+    },
+    {
+      "source": "B",
+      "target": "C",
+      "weight": 2
+    },
+    {
+      "source": "B",
+      "target": "D",
+      "weight": 5
+    },
+    {
+      "source": "C",
+      "target": "D",
+      "weight": 1
+    }
+  ],
+  "source": "A",
+  "sink": "D"
+}

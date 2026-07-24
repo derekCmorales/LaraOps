@@ -1,0 +1,8 @@
+{
+  "mode": "center_of_gravity",
+  "points": [
+    { "name": "C1", "x": 10, "y": 20, "volume": 100 },
+    { "name": "C2", "x": 30, "y": 40, "volume": 200 },
+    { "name": "C3", "x": 50, "y": 10, "volume": 150 }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "supply": {"A": 20, "B": 30},
+    "demand": {"X": 10, "Y": 40},
+    "costs": {
+      "A": {"X": 2, "Y": 3},
+      "B": {"X": 4, "Y": 1}
+    },
+    "method": "modi_auto"
+  },
+  "expect": {
+    "status": "optimal",
+    "objective_value": 80.0,
+    "shipments": {"A->X": 10, "A->Y": 10, "B->Y": 30}
+  }
+}

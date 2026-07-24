@@ -1,0 +1,25 @@
+{
+  "mode": "decision_tree",
+  "root_id": "D1",
+  "tree": [
+    {
+      "id": "D1",
+      "kind": "decision",
+      "children": [
+        { "to": "T_A", "label": "A" },
+        { "to": "C1", "label": "B" }
+      ]
+    },
+    { "id": "T_A", "kind": "terminal", "value": 100 },
+    {
+      "id": "C1",
+      "kind": "chance",
+      "children": [
+        { "to": "T_low", "label": "low", "probability": 0.5 },
+        { "to": "T_high", "label": "high", "probability": 0.5 }
+      ]
+    },
+    { "id": "T_low", "kind": "terminal", "value": 40 },
+    { "id": "T_high", "kind": "terminal", "value": 200 }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "problem": "knapsack",
+  "capacity": 5,
+  "items": [
+    {
+      "id": "a",
+      "weight": 2,
+      "value": 3
+    },
+    {
+      "id": "b",
+      "weight": 3,
+      "value": 4
+    },
+    {
+      "id": "c",
+      "weight": 4,
+      "value": 5
+    }
+  ]
+}

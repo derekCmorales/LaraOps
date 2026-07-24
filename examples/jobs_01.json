@@ -1,0 +1,9 @@
+{
+  "rule": "spt",
+  "jobs": [
+    { "id": "J1", "times": [3], "due_date": 10 },
+    { "id": "J2", "times": [5], "due_date": 12 },
+    { "id": "J3", "times": [2], "due_date": 8 },
+    { "id": "J4", "times": [4], "due_date": 15 }
+  ]
+}

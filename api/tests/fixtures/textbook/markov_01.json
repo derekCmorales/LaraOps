@@ -1,0 +1,16 @@
+{
+  "_source": "Kemeny & Snell, 'Land of Oz' weather chain (classic textbook example: Rainy/Nice/Snowy)",
+  "request": {
+    "states": ["Rainy", "Nice", "Snowy"],
+    "transition": [
+      [0.5, 0.25, 0.25],
+      [0.5, 0.0, 0.5],
+      [0.25, 0.25, 0.5]
+    ],
+    "initial": [1.0, 0.0, 0.0],
+    "steps": 10
+  },
+  "expect": {
+    "steady_state": { "Rainy": 0.4, "Nice": 0.2, "Snowy": 0.4 }
+  }
+}

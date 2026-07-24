@@ -1,0 +1,8 @@
+{
+  "row_strategies": ["R1", "R2"],
+  "col_strategies": ["C1", "C2"],
+  "payoff": [
+    [2, -1],
+    [-1, 1]
+  ]
+}

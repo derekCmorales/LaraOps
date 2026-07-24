@@ -1,0 +1,8 @@
+{
+  "request": {
+    "series": [100, 110, 105, 120, 115],
+    "methods": ["naive"],
+    "horizon": 2
+  },
+  "expect": {"next_naive": 115}
+}

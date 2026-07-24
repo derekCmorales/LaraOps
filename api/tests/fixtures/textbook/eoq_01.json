@@ -1,0 +1,11 @@
+{
+  "request": {"D": 1000, "S": 10, "H": 0.5, "C": 0},
+  "expect": {
+    "status": "ok",
+    "Q_star": 200.0,
+    "TC": 100.0,
+    "orders_per_year": 5.0,
+    "TC_ordering": 50.0,
+    "TC_holding": 50.0
+  }
+}
