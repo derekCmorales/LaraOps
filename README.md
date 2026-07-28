@@ -14,18 +14,22 @@ Documentos de producto/técnicos:
 Para poder correr el proyecto localmente, necesitas tener pre-instalado:
 
 - **Node.js** (v18 o superior) y **npm**: Para manejar las dependencias y correr el entorno, además del frontend (React/Vite).
-- **Python 3** (v3.9 o superior) y **pip**: Para el backend (FastAPI). El script de inicio creará automáticamente un entorno virtual (`.venv`) usando `python3` e instalará los requerimientos.
+- **Python 3** (v3.11 o superior): Para el backend (FastAPI). El script de inicio creará automáticamente un entorno virtual (`.venv`) e instalará los requerimientos.
+  - Windows: asegúrate de que `python` esté en el PATH (verificar con `python --version`).
+  - macOS/Linux: se usa `python3`.
 
 ## Arranque (Recomendado)
 
-Para levantar toda la aplicación (API + Web) de forma simultánea, solo tienes que ejecutar desde la raíz del proyecto:
+Para levantar toda la aplicación (API + Web) de forma simultánea, ejecuta desde la raíz del proyecto:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Esto instalará las dependencias necesarias en la raíz y usará `concurrently` para lanzar tanto la API como el frontend de manera simultánea.
+Funciona en **Windows, macOS y Linux** sin configuración adicional. El script crea el entorno virtual de Python automáticamente si no existe.
+
+Esto usará `concurrently` para lanzar tanto la API como el frontend de manera simultánea.
 
 - **Web (Interfaz Gráfica)**: http://127.0.0.1:5173
 - **API (Documentación Swagger)**: http://127.0.0.1:8000/docs
@@ -33,9 +37,20 @@ Esto instalará las dependencias necesarias en la raíz y usará `concurrently` 
 ### API
 
 ```bash
+# macOS / Linux
 cd api
 python3 -m venv .venv
 source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+uvicorn app.main:app --reload --port 8000
+```
+
+```powershell
+# Windows (PowerShell)
+cd api
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 pytest -q
 uvicorn app.main:app --reload --port 8000
@@ -57,7 +72,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/modules/eoq/solve \
 ```bash
 cd web
 npm install
-VITE_API_URL=http://127.0.0.1:8000 npm run dev
+npm run dev
 ```
 
 Abre http://127.0.0.1:5173 — marca **LaraOps** en el rail.

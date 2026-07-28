@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:api": "bash scripts/dev-api.sh",
-    "dev:web": "cd web && VITE_API_URL=http://127.0.0.1:8000 npm run dev -- --host 127.0.0.1 --port 5173"
+    "dev:api": "node scripts/dev-api.js",
+    "dev:web": "cd web && npm run dev -- --host 127.0.0.1 --port 5173"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
