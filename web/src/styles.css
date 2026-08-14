@@ -739,6 +739,18 @@ textarea {
   color: var(--ink-600);
 }
 
+.iter-step-note {
+  margin: calc(var(--space) * 3) 0 0;
+  font-size: var(--text-caption);
+  color: var(--ink-600);
+  line-height: 1.4;
+}
+
+.iter-step-note--opt {
+  color: var(--ink-900);
+  font-weight: 600;
+}
+
 .iter-main {
   min-width: 0;
 }
@@ -837,6 +849,17 @@ textarea {
   border: var(--border);
   overflow: hidden;
   background: var(--paper-raised);
+}
+
+.sheet-grid .sheet-varname-col {
+  font-weight: 600;
+  color: var(--ink-900);
+  background: color-mix(in srgb, var(--basic) 6%, var(--paper-raised));
+}
+
+.sheet-grid .sheet-num-col {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ——— Structured forms (sin JSON) ——— */
@@ -1127,6 +1150,27 @@ textarea {
   border: var(--border);
   background: var(--paper-raised);
   padding: calc(var(--space) * 3);
+}
+
+.chart-wrap--lp {
+  min-height: 560px;
+  padding: calc(var(--space) * 2);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+}
+
+.lp-plotly .modebar {
+  top: 8px;
+  right: 8px;
+}
+
+.lp-plotly .modebar-btn path {
+  fill: var(--ink-600);
+}
+
+.lp-plotly .modebar-btn:hover path {
+  fill: var(--ink-900);
 }
 
 .legend-warn {

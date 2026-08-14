@@ -95,6 +95,17 @@ export default function ResultsTabs({ result }: Props) {
                 textColumns={[0]}
               />
             )}
+            {result.tables
+              ?.filter((t) => t.name === "vertices_feasible")
+              .map((t) => (
+                <SolutionTable
+                  key={t.name}
+                  caption={tableName(t.name)}
+                  columns={labelColumns(t.columns)}
+                  rows={labelTableRows(t.rows) as (string | number | boolean | null)[][]}
+                  textColumns={[3, 4]}
+                />
+              ))}
             <Explainer result={result} />
           </div>
         ),

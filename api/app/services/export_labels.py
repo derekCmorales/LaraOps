@@ -123,6 +123,8 @@ LABELS: dict[str, str] = {
     "stage": "etapa",
     "state": "estado",
     "optimal": "óptimo",
+    "optimo": "óptimo",
+    "vertices_feasible": "Vértices de la región factible",
     "infeasible": "infactible",
     "unbounded": "no acotado",
     "feasible": "factible",

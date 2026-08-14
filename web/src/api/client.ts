@@ -13,7 +13,14 @@ export type ModuleResult = {
   sensitivity: unknown | null;
   graph: {
     type: string;
-    series?: { name: string; x: number[]; y: number[] }[];
+    series?: {
+      name: string;
+      x: number[];
+      y: number[];
+      role?: string;
+      equation?: string;
+      meta?: { x: number; y: number; z?: number; sources?: string[] }[];
+    }[];
     x_label?: string;
     y_label?: string;
     title?: string;

@@ -65,3 +65,46 @@ def test_lp_unbounded():
     )
     result = solve(req)
     assert result.status == SolveStatus.unbounded
+
+
+def _two_constraint_max() -> LPRequest:
+    return LPRequest(
+        sense="max",
+        objective={"A": 2, "B": 3},
+        constraints=[
+            LPConstraint(id="R1", coeffs={"A": 1, "B": 3}, sense=ConstraintSense.le, rhs=6),
+            LPConstraint(id="R2", coeffs={"A": 5, "B": 3}, sense=ConstraintSense.le, rhs=15),
+        ],
+    )
+
+
+def test_lp_two_constraint_intersection():
+    result = solve(_two_constraint_max())
+    assert result.status == SolveStatus.optimal
+    assert_allclose(result.solution.objective_value, 8.25, atol=LP_ATOL)
+    assert_allclose(result.solution.variables, {"A": 2.25, "B": 1.25}, atol=LP_ATOL)
+
+    assert result.tables
+    table = next(t for t in result.tables if t.name == "vertices_feasible")
+    assert table.columns[:3] == ["A", "B", "Z"]
+    assert "origen" in table.columns
+    assert "optimo" in table.columns
+
+    intersection = next(
+        row
+        for row in table.rows
+        if abs(float(row[0]) - 2.25) < LP_ATOL and abs(float(row[1]) - 1.25) < LP_ATOL
+    )
+    assert abs(float(intersection[2]) - 8.25) < LP_ATOL
+    origen = str(intersection[3])
+    assert "R1" in origen and "R2" in origen
+    opt_idx = table.columns.index("optimo")
+    assert str(intersection[opt_idx]).lower() in {"sí", "si", "yes", "1"}
+
+    axis_vertex = next(
+        row
+        for row in table.rows
+        if abs(float(row[0])) < LP_ATOL and abs(float(row[1]) - 2.0) < LP_ATOL
+    )
+    assert abs(float(axis_vertex[2]) - 6.0) < LP_ATOL
+    assert str(axis_vertex[opt_idx]).lower() not in {"sí", "si", "yes", "1"}

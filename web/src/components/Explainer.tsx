@@ -137,6 +137,12 @@ function explain(result: ModuleResult): string {
     );
   }
 
+  if (result.tables?.some((t) => t.name === "vertices_feasible")) {
+    bits.push(
+      "La tabla de vértices evalúa Z en cada esquina de la región factible (método gráfico: intersección de rectas). El óptimo es la fila marcada."
+    );
+  }
+
   if (!bits.length) {
     bits.push(
       "Revisa la pestaña Solución para ver variables y métricas. En Iteraciones puedes seguir el procedimiento paso a paso."

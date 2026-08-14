@@ -7,4 +7,7 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  optimizeDeps: {
+    include: ["plotly.js-basic-dist", "react-plotly.js"],
+  },
 });

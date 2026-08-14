@@ -124,12 +124,15 @@ export default function IterationsViewer({ steps }: Props) {
     undefined;
   const leave = (meta.leave as string) || pivot?.leave;
   const z = meta.z ?? meta.relaxation_objective ?? meta.objective;
+  const isLast = idx === sorted.length - 1;
 
   const why =
     (meta.pruned_reason as string) ||
-    (enter
-      ? `Entra ${enter}${leave ? `; sale ${leave}` : ""} según la regla del método.`
-      : translateTitle(step.title));
+    (isLast && !enter
+      ? "No hay variable que mejore Z. Este es el tableau óptimo; el valor final está en la banda de estado."
+      : enter
+        ? `Entra ${enter}${leave ? `; sale ${leave}` : ""} según la regla del método.`
+        : translateTitle(step.title));
 
   if (stack) {
     return (
@@ -139,10 +142,11 @@ export default function IterationsViewer({ steps }: Props) {
             Vista paso a paso
           </button>
         </div>
-        {sorted.map((s) => (
-          <details key={s.index} open>
+        {sorted.map((s, si) => (
+          <details key={s.index} open={si === sorted.length - 1}>
             <summary>
               Paso {s.index + 1}: {methodLabel(s.method)} — {translateTitle(s.title)}
+              {si === sorted.length - 1 ? " · óptimo" : ""}
             </summary>
             {s.tableau ? (
               <Tableau table={s.tableau} flash={new Set()} pivot={null} caption={`Iteración ${s.index + 1}`} />
@@ -163,6 +167,7 @@ export default function IterationsViewer({ steps }: Props) {
           <dt>Iteración</dt>
           <dd>
             {idx + 1} de {sorted.length}
+            {isLast ? " · óptima" : " · intermedia"}
           </dd>
           <dt>Método</dt>
           <dd>{methodLabel(step.method)}</dd>
@@ -188,11 +193,19 @@ export default function IterationsViewer({ steps }: Props) {
           )}
           {z != null && (
             <>
-              <dt>Z</dt>
+              <dt>Z de esta iteración</dt>
               <dd>{Number(z).toLocaleString("es-MX", { maximumFractionDigits: 4 })}</dd>
             </>
           )}
         </dl>
+        {!isLast ? (
+          <p className="iter-step-note">
+            Paso intermedio. El óptimo está en el último tableau; Z final aparece arriba en la
+            banda de estado.
+          </p>
+        ) : (
+          <p className="iter-step-note iter-step-note--opt">Tableau óptimo.</p>
+        )}
         <div className="iter-why">
           <strong>¿Por qué?</strong>
           <div>{why}</div>

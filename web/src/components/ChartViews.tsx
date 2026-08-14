@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Component, lazy, Suspense, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -16,6 +16,21 @@ import {
 import type { ModuleResult } from "../api/client";
 import { labelOf } from "../lib/resultLabels";
 import SolutionTable from "./SolutionTable";
+
+const LpGraphView = lazy(() => import("./LpGraphView"));
+
+class ChartErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return <p className="field-hint">No se pudo cargar el gráfico interactivo.</p>;
+    }
+    return this.props.children;
+  }
+}
 
 const C = {
   ink: "#0A1628",
@@ -691,6 +706,15 @@ export default function ChartViews({ result }: { result: ModuleResult }) {
       <p className="field-hint">
         Este módulo no generó un gráfico para este resultado. Revisa Solución o Tablas.
       </p>
+    );
+  }
+  if (t === "xy" && result.graph.kind === "lp2d") {
+    return (
+      <ChartErrorBoundary>
+        <Suspense fallback={<p className="field-hint">Cargando gráfico interactivo…</p>}>
+          <LpGraphView result={result} />
+        </Suspense>
+      </ChartErrorBoundary>
     );
   }
   if (t === "xy") return <GraphXYView result={result} />;

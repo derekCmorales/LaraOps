@@ -58,9 +58,12 @@ function matrixToRows(
   const cols: ColDef[] = Array.from({ length: width }, (_, i) => {
     const def: ColDef = {
       field: `c${i}`,
-      headerName: lpSemantic ? colLabel(i) : useSemanticHeaders && headerRow[i] != null && headerRow[i] !== ""
+      headerName:
+        lpSemantic && headerRow[i] != null && String(headerRow[i]).trim() !== ""
           ? String(headerRow[i])
-          : colLabel(i),
+          : useSemanticHeaders && headerRow[i] != null && headerRow[i] !== ""
+            ? String(headerRow[i])
+            : colLabel(i),
       editable: true,
       resizable: true,
       minWidth: 96,
@@ -83,9 +86,15 @@ function matrixToRows(
       };
     }
 
-    if (kind === "lp" && lpSemantic && i > 0 && i < width - 2) {
-      def.cellClass = "sheet-varname-col";
-      def.editable = (params) => params.node?.rowIndex === 0;
+    if (kind === "lp" && i > 0 && i < width - 2) {
+      // Fila 0 = nombres de variable (texto); demás filas = coeficientes numéricos.
+      // Forzar texto evita que AG Grid infiera tipo number y bloquee letras en x1, x2, etc.
+      def.cellDataType = "text";
+      def.cellEditor = "agTextCellEditor";
+      def.cellClassRules = {
+        "sheet-varname-col": (params) => lpSemantic && params.node?.rowIndex === 0,
+        "sheet-num-col": (params) => !lpSemantic || params.node?.rowIndex !== 0,
+      };
     }
 
     if (kind === "lp" && i === senseCol) {
@@ -97,10 +106,6 @@ function matrixToRows(
             ? ["Máx", "Mín"]
             : ["≤", "≥", "="],
       });
-    }
-
-    if (kind === "lp" && i > 0 && i < width - 2) {
-      def.cellClass = "sheet-num-col";
     }
 
     return def;

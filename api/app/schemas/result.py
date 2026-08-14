@@ -37,7 +37,7 @@ class GraphXY(BaseModel):
     y_label: str = ""
     title: str = ""
     subtitle: str = ""
-    # kind hint for UI: "line" | "bar" | "area" | "control" | "sawtooth" | ""
+    # kind hint for UI: "line" | "bar" | "area" | "control" | "sawtooth" | "lp2d" | ""
     kind: str = ""
 
 
