@@ -22,7 +22,7 @@ services:
     name: laraops-web
     runtime: static
     rootDir: web
-    buildCommand: ': "${VITE_API_URL:?VITE_API_URL vacía: espera a que la API esté Live y redespliega el web}" && npm install && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
       - key: NODE_VERSION
