@@ -1,0 +1,41 @@
+# Blueprint de Render (plan Free).
+# Crea dos servicios: API FastAPI + frontend estático (Vite).
+# Docs: docs/deploy-render.md
+
+services:
+  - type: web
+    name: laraops-api
+    runtime: python
+    plan: free
+    rootDir: api
+    buildCommand: pip install .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+    buildFilter:
+      paths:
+        - api/**
+
+  - type: web
+    name: laraops-web
+    runtime: static
+    rootDir: web
+    buildCommand: ': "${VITE_API_URL:?VITE_API_URL vacía: espera a que la API esté Live y redespliega el web}" && npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: VITE_API_URL
+        fromService:
+          name: laraops-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    buildFilter:
+      paths:
+        - web/**

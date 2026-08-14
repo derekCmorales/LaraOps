@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.cors import allow_origin_regex, allow_origins
 from app.routers import (
     acceptance_sampling,
     aggregate_planning,
@@ -34,7 +35,8 @@ from app.routers import (
 app = FastAPI(title="LaraOps API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allow_origins(),
+    allow_origin_regex=allow_origin_regex(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

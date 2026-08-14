@@ -117,3 +117,9 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/modules/lp/export.pdf \
 ```
 
 Validación con compañeros: ver `docs/validation-session.md` (no cerrar hito 5 sin ≥3 respuestas humanas).
+
+## Despliegue (Render, plan Free)
+
+No hay base de datos. El frontend es un Static Site y la API un Web Service Free.
+
+Guía paso a paso: [`docs/deploy-render.md`](docs/deploy-render.md). El Blueprint está en `render.yaml`.
