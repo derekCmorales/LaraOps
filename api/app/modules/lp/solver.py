@@ -205,6 +205,8 @@ def solve(req: LPRequest) -> ModuleResult:
             basic=basic,
             var_names=var_names,
             constraint_ids=constraint_ids,
+            constraints=req.constraints,
+            variables=variables,
             n_decision=n,
             maximize=maximize,
             c_user=c_user,

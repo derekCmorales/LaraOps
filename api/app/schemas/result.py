@@ -18,9 +18,12 @@ class SensitivityBlock(BaseModel):
     reduced_costs: list[dict[str, Any]] = Field(default_factory=list)
     # each: {"variable": str, "reduced_cost": float}
     objective_ranges: list[dict[str, Any]] = Field(default_factory=list)
-    # each: {"variable": str, "coeff": float, "allowable_increase": float, "allowable_decrease": float}
+    # each: {"variable", "coeff", "allowable_increase", "allowable_decrease", "min_coef", "max_coef"}
     rhs_ranges: list[dict[str, Any]] = Field(default_factory=list)
     # each: {"constraint_id": str, "rhs": float, "allowable_increase": float, "allowable_decrease": float}
+    constraint_analysis: list[dict[str, Any]] = Field(default_factory=list)
+    # each: constraint_id, lhs, sense, rhs, slack_or_surplus, shadow_price,
+    #       allowable_min_rhs, allowable_max_rhs (float or "M")
 
 
 class NamedTable(BaseModel):

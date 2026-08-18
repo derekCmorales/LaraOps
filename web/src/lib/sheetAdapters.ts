@@ -54,6 +54,10 @@ export type LpBody = {
   sense: "min" | "max";
   objective: Record<string, number>;
   constraints: { id: string; coeffs: Record<string, number>; sense: string; rhs: number }[];
+  variable_names?: string[];
+  include_iterations?: boolean;
+  include_sensitivity?: boolean;
+  include_graph?: boolean;
 };
 
 const LP_OBJECTIVE_LABEL = "Objetivo (Z)";
@@ -167,14 +171,22 @@ export function sheetToLp(matrix: SheetMatrix): LpBody {
       varNames.forEach((v, i) => {
         coeffs[v] = num(r[i + 1]);
       });
+      const id = str(r[0]);
+      const allZero = Object.values(coeffs).every((c) => Math.abs(c) < 1e-12);
+      if (allZero) {
+        throw new Error(`La restricción «${id}» tiene todos los coeficientes en cero`);
+      }
       return {
-        id: str(r[0]),
+        id,
         coeffs,
         sense: parseConstraintSense(str(r[senseIdx]) || "≤"),
         rhs: num(r[rhsIdx]),
       };
     });
-  return { sense, objective, constraints };
+  if (!constraints.length) {
+    throw new Error("Agrega al menos una restricción con coeficientes distintos de cero");
+  }
+  return { sense, objective, constraints, variable_names: varNames };
 }
 
 /** Plantilla vacía transporte: 1 origen, 1 destino. */

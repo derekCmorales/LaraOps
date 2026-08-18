@@ -19,17 +19,37 @@ const EXAMPLE: LpBody = {
   ],
 };
 
+type LpOptions = {
+  include_iterations: boolean;
+  include_sensitivity: boolean;
+  include_graph: boolean;
+};
+
 export default function LpPage() {
-  const [matrix, setMatrix] = useState<SheetMatrix>(() => emptyLpSheet(2, 1));
+  const [matrix, setMatrix] = useState<SheetMatrix>(() => emptyLpSheet(2, 3));
+  const [options, setOptions] = useState<LpOptions>({
+    include_iterations: true,
+    include_sensitivity: true,
+    include_graph: true,
+  });
+
+  function buildBody() {
+    const body = sheetToLp(matrix);
+    return { ...body, ...options };
+  }
+
+  function toggleOption(key: keyof LpOptions) {
+    setOptions((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   return (
     <ModuleWorkbench
       group="Optimización"
       title="Programación lineal"
-      blurb="Fila 1: nombres de variables (editable). Fila 2: objetivo Z. Resto: restricciones. Usa Máx/Mín y ≤ ≥ =. Puedes renombrar variables sin romper el modelo."
+      blurb="Fila 1: nombres de variables. Fila 2: objetivo Z. Resto: restricciones con Sentido y LD. Tras resolver verás Solución (variables y restricciones activas), Sensibilidad (holgura y rangos LD), Iteraciones (simplex) y Gráfico (si hay 2 variables). Pega bloques desde Excel con Ctrl+V."
       matrix={matrix}
       onMatrixChange={setMatrix}
-      buildBody={() => sheetToLp(matrix)}
+      buildBody={buildBody}
       solve={solveLp}
       exportXlsx={exportLpXlsx}
       exportPdf={exportLpPdf}
@@ -39,6 +59,35 @@ export default function LpPage() {
       sheetKind="lp"
       onLoadExample={() => setMatrix(lpToSheet(EXAMPLE))}
       onImportBody={(body) => setMatrix(lpToSheet(body as LpBody))}
+      toolbar={
+        <fieldset className="lp-options">
+          <legend className="section-label">Opciones de reporte</legend>
+          <label className="check-inline">
+            <input
+              type="checkbox"
+              checked={options.include_iterations}
+              onChange={() => toggleOption("include_iterations")}
+            />
+            Iteraciones simplex
+          </label>
+          <label className="check-inline">
+            <input
+              type="checkbox"
+              checked={options.include_sensitivity}
+              onChange={() => toggleOption("include_sensitivity")}
+            />
+            Sensibilidad / ranging
+          </label>
+          <label className="check-inline">
+            <input
+              type="checkbox"
+              checked={options.include_graph}
+              onChange={() => toggleOption("include_graph")}
+            />
+            Gráfico (2 variables)
+          </label>
+        </fieldset>
+      }
     />
   );
 }
