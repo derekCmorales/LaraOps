@@ -30,6 +30,49 @@ def test_lp_01_product_mix():
     assert result.iterations is not None and len(result.iterations) > 0
     assert result.sensitivity is not None
     assert len(result.sensitivity.shadow_prices) == 3
+    assert len(result.sensitivity.constraint_analysis) == 3
+
+    by_id = {r["constraint_id"]: r for r in result.sensitivity.constraint_analysis}
+    # R1: 2*20 + 1*60 = 100, binding
+    r1 = by_id["c1"]
+    assert_allclose(r1["lhs"], 100.0, atol=LP_ATOL)
+    assert_allclose(r1["slack_or_surplus"], 0.0, atol=LP_ATOL)
+    assert r1["shadow_price"] > 0
+    # R3: x1 = 20, slack = 40 - 20 = 20
+    r3 = by_id["c3"]
+    assert_allclose(r3["lhs"], 20.0, atol=LP_ATOL)
+    assert_allclose(r3["slack_or_surplus"], 20.0, atol=LP_ATOL)
+    assert abs(r3["shadow_price"]) < 1e-8
+
+    for row in result.sensitivity.objective_ranges:
+        assert "min_coef" in row and "max_coef" in row
+        assert row["min_coef"] <= row["coeff"] <= row["max_coef"]
+
+
+def test_lp_constraint_analysis_binding_ranges():
+    data = _load("lp_01.json")
+    result = solve(LPRequest(**data["request"]))
+    assert result.sensitivity is not None
+    for row in result.sensitivity.constraint_analysis:
+        rhs = float(row["rhs"])
+        min_rhs = row["allowable_min_rhs"]
+        max_rhs = row["allowable_max_rhs"]
+        if isinstance(min_rhs, (int, float)):
+            assert min_rhs <= rhs + LP_ATOL
+        if isinstance(max_rhs, (int, float)):
+            assert max_rhs >= rhs - LP_ATOL
+
+
+def test_lp_infeasible_fixture():
+    data = _load("lp_infeasible.json")
+    result = solve(LPRequest(**data["request"]))
+    assert result.status == SolveStatus.infeasible
+
+
+def test_lp_unbounded_fixture():
+    data = _load("lp_unbounded.json")
+    result = solve(LPRequest(**data["request"]))
+    assert result.status == SolveStatus.unbounded
 
 
 def test_lp_linprog_crosscheck():

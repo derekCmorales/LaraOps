@@ -1,0 +1,12 @@
+{
+  "request": {
+    "sense": "max",
+    "objective": {"x1": 1, "x2": 1},
+    "constraints": [
+      {"id": "c1", "coeffs": {"x1": 1, "x2": -1}, "sense": "<=", "rhs": 1}
+    ]
+  },
+  "expect": {
+    "status": "unbounded"
+  }
+}

@@ -643,6 +643,28 @@ textarea {
   text-wrap: pretty;
 }
 
+.lp-options {
+  margin: 0 0 calc(var(--space) * 3);
+  padding: calc(var(--space) * 3);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space) * 3);
+}
+
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--space) * 1.5);
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.check-inline input {
+  accent-color: var(--basic);
+}
+
 .data-table .cell-flash {
   animation: cell-flash 400ms ease;
 }
