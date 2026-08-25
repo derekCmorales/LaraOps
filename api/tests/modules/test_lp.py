@@ -110,6 +110,26 @@ def test_lp_unbounded():
     assert result.status == SolveStatus.unbounded
 
 
+def test_lp_equality_phase1_artificial_in_basis():
+    """Regression: feasible equalities must not crash when Phase I leaves a zero artificial in basis."""
+    req = LPRequest(
+        sense="min",
+        objective={"x1": 2, "x2": 6, "x3": 6, "x4": 2, "x5": 1, "x6": 2, "x7": 5, "x8": 7},
+        constraints=[
+            LPConstraint(id="R1", coeffs={"x1": 1, "x2": 1, "x3": 1, "x4": 1}, sense=ConstraintSense.eq, rhs=5000),
+            LPConstraint(id="R2", coeffs={"x5": 1, "x6": 1, "x7": 1, "x8": 1}, sense=ConstraintSense.eq, rhs=1600),
+            LPConstraint(id="R3", coeffs={"x1": 1, "x5": 1}, sense=ConstraintSense.eq, rhs=1400),
+            LPConstraint(id="R4", coeffs={"x2": 1, "x6": 1}, sense=ConstraintSense.eq, rhs=3200),
+            LPConstraint(id="R5", coeffs={"x3": 1, "x7": 1}, sense=ConstraintSense.eq, rhs=2000),
+            LPConstraint(id="R6", coeffs={"x4": 1, "x8": 1}, sense=ConstraintSense.eq, rhs=0),
+        ],
+        variable_names=["x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"],
+    )
+    result = solve(req)
+    assert result.status == SolveStatus.optimal
+    assert_allclose(result.solution.objective_value, 27600.0, atol=LP_ATOL)
+
+
 def _two_constraint_max() -> LPRequest:
     return LPRequest(
         sense="max",
