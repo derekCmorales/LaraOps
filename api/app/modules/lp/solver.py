@@ -124,12 +124,25 @@ def solve(req: LPRequest) -> ModuleResult:
                 warnings,
             )
 
-        keep = [j for j in range(total_cols) if j not in set(art_indices)]
+        art_set = set(art_indices)
+        rows_before = A_work.shape[0]
+        A_work, b, basic, keep_rows = _eject_artificials_from_basis(
+            A_work, b, basic, art_set
+        )
+        if len(keep_rows) < rows_before:
+            A_std = A_std[keep_rows, :]
+            b_original = b_original[keep_rows]
+            constraint_ids = [constraint_ids[i] for i in keep_rows]
+            warnings.append(
+                "Restricciones redundantes detectadas y eliminadas tras la Fase I"
+            )
+
+        keep = [j for j in range(A_work.shape[1]) if j not in art_set]
         old_to_new = {old: new for new, old in enumerate(keep)}
         A_work = A_work[:, keep]
         A_std = A_std[:, keep]
         col_names = [col_names[j] for j in keep]
-        basic = [old_to_new[bi] for bi in basic]
+        basic = [old_to_new[bi] for bi in basic if bi in old_to_new]
         c_phase2 = np.zeros(len(keep))
         for j_old, j_new in old_to_new.items():
             if j_old < n:
@@ -270,6 +283,75 @@ def _result(
     )
 
 
+def _pivot_tableau(
+    body: np.ndarray,
+    x_b: np.ndarray,
+    basic: list[int],
+    leave_row: int,
+    enter: int,
+) -> None:
+    """Pivot the canonical tableau in place (same convention as _simplex_loop)."""
+    pivot = body[leave_row, enter]
+    body[leave_row, :] = body[leave_row, :] / pivot
+    x_b[leave_row] = x_b[leave_row] / pivot
+    for i in range(body.shape[0]):
+        if i == leave_row:
+            continue
+        factor = body[i, enter]
+        body[i, :] = body[i, :] - factor * body[leave_row, :]
+        x_b[i] = x_b[i] - factor * x_b[leave_row]
+    basic[leave_row] = enter
+
+
+def _eject_artificials_from_basis(
+    A: np.ndarray,
+    b: np.ndarray,
+    basic: list[int],
+    art_set: set[int],
+    *,
+    tol: float = 1e-9,
+) -> tuple[np.ndarray, np.ndarray, list[int], list[int]]:
+    """Remove zero-valued artificials from the basis before dropping columns."""
+    body = A.astype(float).copy()
+    x_b = b.astype(float).copy()
+    basic = list(basic)
+    m, n = body.shape
+
+    changed = True
+    while changed:
+        changed = False
+        for i in range(m):
+            bi = basic[i]
+            if bi not in art_set or abs(x_b[i]) > tol:
+                continue
+            nonbasic = [j for j in range(n) if j not in basic]
+            enter = next(
+                (
+                    j
+                    for j in nonbasic
+                    if j not in art_set and abs(body[i, j]) > tol
+                ),
+                None,
+            )
+            if enter is None:
+                continue
+            _pivot_tableau(body, x_b, basic, i, enter)
+            changed = True
+            break
+
+    keep_rows = [
+        i
+        for i in range(m)
+        if basic[i] not in art_set or abs(x_b[i]) > tol
+    ]
+    if len(keep_rows) < m:
+        body = body[keep_rows, :]
+        x_b = x_b[keep_rows]
+        basic = [basic[i] for i in keep_rows]
+
+    return body, x_b, basic, keep_rows
+
+
 def _simplex_loop(
     A: np.ndarray,
     b: np.ndarray,
@@ -352,16 +434,7 @@ def _simplex_loop(
         }
 
         # Pivot on tableau
-        pivot = body[leave_row, enter]
-        body[leave_row, :] = body[leave_row, :] / pivot
-        x_b[leave_row] = x_b[leave_row] / pivot
-        for i in range(m):
-            if i == leave_row:
-                continue
-            factor = body[i, enter]
-            body[i, :] = body[i, :] - factor * body[leave_row, :]
-            x_b[i] = x_b[i] - factor * x_b[leave_row]
-        basic[leave_row] = enter
+        _pivot_tableau(body, x_b, basic, leave_row, enter)
         A = body
         b = x_b
 
