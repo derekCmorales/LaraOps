@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { downloadBlob, ModuleResult } from "../api/client";
 import ExportMenu from "./ExportMenu";
 import ModuleShell from "./ModuleShell";
@@ -81,11 +81,6 @@ export default function ModuleWorkbench({
     }
   }
 
-  async function onSolve(e: FormEvent) {
-    e.preventDefault();
-    await runSolve();
-  }
-
   async function onExportXlsx() {
     setError(null);
     try {
@@ -133,7 +128,11 @@ export default function ModuleWorkbench({
       }
     >
       {tab === "datos" ? (
-        <form onSubmit={onSolve}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+          }}
+        >
           {blurb ? <p className="module-blurb">{blurb}</p> : null}
           {toolbar}
           <SpreadsheetEditor matrix={matrix} onChange={onMatrixChange} height={sheetHeight} kind={sheetKind} />

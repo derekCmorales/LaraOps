@@ -6,10 +6,22 @@ import {
   ModuleRegistry,
   CellValueChangedEvent,
   ProcessDataFromClipboardParams,
+  SuppressKeyboardEventParams,
+  CellEditingStoppedEvent,
+  ValueParserParams,
 } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
 import type { Cell, SheetMatrix } from "../lib/sheetAdapters";
+import {
+  blankLpConstraintRow,
+  classifyLpCell,
+  coerceLpValue,
+  isEmptyCell,
+  matchSenseInput,
+  senseChoicesForRow,
+} from "../lib/lpSheetNav";
+import { SenseCellEditor, SenseCellRenderer } from "./SensePicker";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -51,6 +63,7 @@ function matrixToRows(
   const dataMatrix =
     kind === "lp" && isSemanticHeaderRow(headerRow) ? matrix : useSemanticHeaders ? matrix.slice(1) : matrix;
   const senseCol = kind === "lp" && isSemanticHeaderRow(headerRow) ? width - 2 : -1;
+  const rhsCol = kind === "lp" ? width - 1 : -1;
   const labelCol = kind === "lp" ? 0 : -1;
   const objectiveRowIndex = kind === "lp" ? 1 : 0;
   const lpSemantic = kind === "lp" && isSemanticHeaderRow(headerRow);
@@ -81,31 +94,56 @@ function matrixToRows(
       };
       def.valueSetter = (params) => {
         if (params.node?.rowIndex === objectiveRowIndex) return false;
-        if (params.data) params.data[`c${i}`] = params.newValue;
+        if (params.data) {
+          const ri = params.node?.rowIndex ?? -1;
+          params.data[`c${i}`] = coerceLpValue(classifyLpCell(ri, i, width), params.newValue, i, ri);
+        }
         return true;
       };
     }
 
     if (kind === "lp" && i > 0 && i < width - 2) {
-      // Fila 0 = nombres de variable (texto); demás filas = coeficientes numéricos.
-      // Forzar texto evita que AG Grid infiera tipo number y bloquee letras en x1, x2, etc.
       def.cellDataType = "text";
       def.cellEditor = "agTextCellEditor";
       def.cellClassRules = {
         "sheet-varname-col": (params) => lpSemantic && params.node?.rowIndex === 0,
         "sheet-num-col": (params) => !lpSemantic || params.node?.rowIndex !== 0,
       };
+      def.valueParser = (params: ValueParserParams) => {
+        const ri = params.node?.rowIndex ?? -1;
+        return coerceLpValue(classifyLpCell(ri, i, width), params.newValue, i, ri);
+      };
+    }
+
+    if (kind === "lp" && i === rhsCol) {
+      def.cellDataType = "text";
+      def.cellEditor = "agTextCellEditor";
+      def.cellClass = "sheet-num-col";
+      def.editable = (params) => {
+        const ri = params.node?.rowIndex ?? -1;
+        return ri !== 0 && ri !== objectiveRowIndex;
+      };
+      def.valueParser = (params: ValueParserParams) => {
+        const ri = params.node?.rowIndex ?? -1;
+        return coerceLpValue(classifyLpCell(ri, i, width), params.newValue, i, ri);
+      };
     }
 
     if (kind === "lp" && i === senseCol) {
+      def.minWidth = 156;
+      def.maxWidth = 220;
+      def.flex = 0.7;
       def.cellClass = "sheet-sense-col";
-      def.cellEditor = "agSelectCellEditor";
-      def.cellEditorParams = (params: { node?: { rowIndex?: number } }) => ({
-        values:
-          params.node?.rowIndex === objectiveRowIndex
-            ? ["Máx", "Mín"]
-            : ["≤", "≥", "="],
-      });
+      def.editable = (params) => (params.node?.rowIndex ?? -1) > 0;
+      def.cellRenderer = SenseCellRenderer;
+      def.cellEditor = SenseCellEditor;
+      def.cellEditorPopup = true;
+      def.cellEditorPopupPosition = "under";
+      def.suppressKeyboardEvent = suppressSenseKeys;
+      def.valueParser = (params: ValueParserParams) => {
+        const ri = params.node?.rowIndex ?? -1;
+        return coerceLpValue(classifyLpCell(ri, i, width), params.newValue, i, ri);
+      };
     }
 
     return def;
@@ -123,6 +161,28 @@ function matrixToRows(
     return row;
   });
   return { cols, rows, headerRow: lpSemantic ? null : useSemanticHeaders ? headerRow : null };
+}
+
+function suppressSenseKeys(params: SuppressKeyboardEventParams): boolean {
+  if (params.editing) return false;
+  const key = params.event.key;
+  if (key === "Tab" || key === "Enter" || key === "F2" || key === "Escape") return false;
+  const ri = params.node?.rowIndex ?? -1;
+  if (ri <= 0) return false;
+  const isObjective = ri === 1;
+  const choices = senseChoicesForRow(ri);
+  if (key === "Delete" || key === "Backspace") {
+    params.node.setDataValue(params.column, choices[0]?.value ?? "≤");
+    params.event.preventDefault();
+    params.event.stopPropagation();
+    return true;
+  }
+  const matched = matchSenseInput(key, isObjective);
+  if (!matched) return false;
+  params.node.setDataValue(params.column, matched);
+  params.event.preventDefault();
+  params.event.stopPropagation();
+  return true;
 }
 
 function rowsToMatrix(
@@ -160,6 +220,8 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
   const gridRef = useRef<AgGridReact<RowData>>(null);
   const { cols, rows, headerRow } = useMemo(() => matrixToRows(matrix, kind), [matrix, kind]);
   const colCount = cols.length;
+  const minRows = kind === "lp" ? 3 : headerRow ? 2 : 1;
+  const minCols = kind === "lp" ? 5 : 2;
 
   const syncFromGrid = useCallback(() => {
     const api = gridRef.current?.api;
@@ -172,13 +234,45 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
   }, [colCount, headerRow, kind, onChange]);
 
   const onCellValueChanged = useCallback(
-    (_e: CellValueChangedEvent<RowData>) => {
+    (e: CellValueChangedEvent<RowData>) => {
+      if (kind === "lp") {
+        const ri = e.node.rowIndex ?? -1;
+        const field = e.column.getColId();
+        const ci = cols.findIndex((c) => c.field === field);
+        if (ci >= 0 && isEmptyCell(e.newValue)) {
+          const filled = coerceLpValue(classifyLpCell(ri, ci, colCount), e.newValue, ci, ri);
+          if (filled !== e.newValue && filled !== "") {
+            e.node.setDataValue(e.column, filled);
+            return;
+          }
+        }
+      }
       syncFromGrid();
     },
-    [syncFromGrid]
+    [kind, cols, colCount, syncFromGrid]
+  );
+
+  const onCellEditingStopped = useCallback(
+    (e: CellEditingStoppedEvent<RowData>) => {
+      if (kind !== "lp") return;
+      const ri = e.node.rowIndex ?? -1;
+      const field = e.column.getColId();
+      const ci = cols.findIndex((c) => c.field === field);
+      if (ci < 0) return;
+      const filled = coerceLpValue(classifyLpCell(ri, ci, colCount), e.newValue, ci, ri);
+      if (isEmptyCell(e.newValue) && filled !== e.newValue) {
+        e.node.setDataValue(e.column, filled);
+      }
+    },
+    [kind, cols, colCount]
   );
 
   function addRow() {
+    if (kind === "lp") {
+      const constraintNumber = Math.max(1, matrix.length - 1);
+      onChange([...matrix, blankLpConstraintRow(colCount, constraintNumber)]);
+      return;
+    }
     const blank: Cell[] = Array.from({ length: colCount }, () => "");
     onChange([...matrix, blank]);
   }
@@ -202,16 +296,15 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
 
   function removeLastColumn() {
     if (kind === "lp") {
-      if (colCount <= 5) return;
+      if (colCount <= minCols) return;
       onChange(matrix.map((r) => [...r.slice(0, -3), ...r.slice(-2)]));
       return;
     }
-    if (colCount <= 2) return;
+    if (colCount <= minCols) return;
     onChange(matrix.map((r) => r.slice(0, -1)));
   }
 
   function removeLastRow() {
-    const minRows = kind === "lp" ? 3 : headerRow ? 2 : 1;
     if (matrix.length <= minRows) return;
     onChange(matrix.slice(0, -1));
   }
@@ -220,7 +313,6 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
     (params: ProcessDataFromClipboardParams): string[][] | null => {
       const data = params.data;
       if (!data?.length) return null;
-      // Expandir matriz si el pegado es más grande
       const api = gridRef.current?.api;
       const start = api?.getFocusedCell();
       const startRow = start?.rowIndex ?? 0;
@@ -229,11 +321,15 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
       const needCols = startCol + Math.max(...data.map((r) => r.length));
       let next = matrix.map((r) => [...r]);
       while (next.length < needRows) {
-        next.push(Array.from({ length: Math.max(colCount, needCols) }, () => "" as Cell));
+        if (kind === "lp") {
+          next.push(blankLpConstraintRow(Math.max(colCount, needCols), next.length - 1));
+        } else {
+          next.push(Array.from({ length: Math.max(colCount, needCols) }, () => "" as Cell));
+        }
       }
       next = next.map((r) => {
         const copy = [...r];
-        while (copy.length < needCols) copy.push("");
+        while (copy.length < needCols) copy.push(kind === "lp" ? 0 : "");
         return copy;
       });
       data.forEach((row, ri) => {
@@ -244,9 +340,9 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
         });
       });
       onChange(next);
-      return null; // ya aplicamos nosotros
+      return null;
     },
-    [cols, colCount, matrix, onChange]
+    [cols, colCount, matrix, onChange, kind]
   );
 
   return (
@@ -263,7 +359,7 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
           className="btn btn-quiet"
           onClick={removeLastRow}
           aria-label="Quitar última fila"
-          disabled={matrix.length <= (headerRow ? 2 : 1)}
+          disabled={matrix.length <= minRows}
         >
           − Fila
         </button>
@@ -272,12 +368,12 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
           className="btn btn-quiet"
           onClick={removeLastColumn}
           aria-label="Quitar última columna"
-          disabled={colCount <= 2}
+          disabled={colCount <= minCols}
         >
           − Columna
         </button>
         <span className="field-hint sheet-hint">
-          Clic para editar · Tab / Enter para navegar · Ctrl+V pega desde Excel
+          Tab → siguiente · Enter ↓ · En signo: &lt; = &gt; o clic
         </span>
       </div>
       <div
@@ -285,6 +381,9 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
         style={{ height, width: "100%" }}
         role="grid"
         aria-label="Hoja de datos del modelo"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.stopPropagation();
+        }}
       >
         <AgGridReact<RowData>
           ref={gridRef}
@@ -292,13 +391,17 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
           columnDefs={cols}
           getRowId={(p) => String(p.data.__rid)}
           onCellValueChanged={onCellValueChanged}
+          onCellEditingStopped={onCellEditingStopped}
           processDataFromClipboard={processDataFromClipboard}
           localeText={LOCALE_ES}
           singleClickEdit
           stopEditingWhenCellsLoseFocus
+          enterNavigatesVertically
+          enterNavigatesVerticallyAfterEdit
+          undoRedoCellEditing
           animateRows={false}
           headerHeight={34}
-          rowHeight={36}
+          rowHeight={kind === "lp" ? 40 : 36}
           defaultColDef={{ sortable: false, filter: false, suppressHeaderMenuButton: true }}
           ensureDomOrder
         />

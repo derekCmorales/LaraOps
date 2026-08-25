@@ -847,7 +847,7 @@ textarea {
 
 .sheet-grid {
   border: var(--border);
-  overflow: hidden;
+  overflow: visible;
   background: var(--paper-raised);
 }
 
@@ -860,6 +860,156 @@ textarea {
 .sheet-grid .sheet-num-col {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
+}
+
+.sheet-grid .ag-cell.sheet-sense-col {
+  padding: 4px 6px;
+  overflow: visible;
+}
+
+.sheet-grid .ag-cell.sheet-sense-col .ag-cell-wrapper,
+.sheet-grid .ag-cell.sheet-sense-col .ag-cell-value {
+  width: 100%;
+  height: 100%;
+}
+
+.sheet-grid .ag-popup-editor {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.sense-static {
+  color: var(--ink-400);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sense-seg {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  gap: 3px;
+}
+
+.sense-seg-compact {
+  min-height: 32px;
+}
+
+.sense-seg-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  color: var(--ink-600);
+  cursor: pointer;
+  font-family: var(--font-data);
+  line-height: 1;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.sense-seg-compact .sense-seg-btn {
+  min-height: 32px;
+}
+
+.sense-seg-btn:hover {
+  border-color: var(--ink-400);
+  background: var(--ink-100);
+  color: var(--ink-900);
+}
+
+.sense-seg-btn:focus-visible {
+  outline: 2px solid var(--ink-900);
+  outline-offset: 1px;
+}
+
+.sense-seg-selected {
+  background: var(--basic);
+  border-color: var(--basic);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--basic) 35%, transparent);
+}
+
+.sense-seg-selected:hover {
+  background: color-mix(in srgb, var(--basic) 88%, #000);
+  border-color: color-mix(in srgb, var(--basic) 88%, #000);
+  color: #fff;
+}
+
+.sense-seg-active:not(.sense-seg-selected) {
+  border-color: var(--ink-900);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--basic) 22%, transparent);
+}
+
+.sense-seg-sym {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.sense-seg-pop {
+  gap: 8px;
+  min-width: 280px;
+}
+
+.sense-pop {
+  padding: 10px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-overlay);
+  outline: none;
+}
+
+.sense-pop .sense-seg-btn {
+  min-width: 88px;
+  min-height: 76px;
+  padding: 10px 8px;
+  gap: 6px;
+}
+
+.sense-pop .sense-seg-sym {
+  font-size: 1.65rem;
+}
+
+.sense-seg-cap {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-wrap: pretty;
+  color: inherit;
+  opacity: 0.9;
+}
+
+.sense-seg-key {
+  font-family: var(--font-data);
+  font-size: 0.62rem;
+  font-weight: 500;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 3px;
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sense-seg-btn {
+    transition: none;
+  }
 }
 
 /* ——— Structured forms (sin JSON) ——— */
@@ -984,10 +1134,14 @@ textarea {
   box-shadow: var(--shadow-overlay);
   max-height: 260px;
   overflow: auto;
+  outline: none;
 }
 
 .dd-option {
   padding: calc(var(--space) * 2.5) calc(var(--space) * 3);
+  min-height: 40px;
+  display: flex;
+  align-items: center;
   border-radius: var(--radius-sm);
   color: var(--ink-900);
   font-size: var(--text-body);
