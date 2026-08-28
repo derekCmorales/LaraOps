@@ -12,7 +12,7 @@ type Props = {
   title: string;
   blurb?: string;
   matrix: SheetMatrix;
-  onMatrixChange: (m: SheetMatrix) => void;
+  onMatrixChange: (m: SheetMatrix | ((prev: SheetMatrix) => SheetMatrix)) => void;
   buildBody: () => unknown;
   solve: (body: unknown) => Promise<ModuleResult>;
   exportXlsx: (body: unknown) => Promise<Blob>;
