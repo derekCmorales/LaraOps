@@ -5,9 +5,9 @@ import {
   ColDef,
   ModuleRegistry,
   CellValueChangedEvent,
+  CellEditingStoppedEvent,
   ProcessDataFromClipboardParams,
   SuppressKeyboardEventParams,
-  CellEditingStoppedEvent,
   ValueParserParams,
 } from "ag-grid-community";
 import "ag-grid-community/styles/ag-grid.css";
@@ -17,7 +17,6 @@ import {
   blankLpConstraintRow,
   classifyLpCell,
   coerceLpValue,
-  isEmptyCell,
   matchSenseInput,
   senseChoicesForRow,
 } from "../lib/lpSheetNav";
@@ -29,7 +28,7 @@ export type SheetEditorKind = "generic" | "lp";
 
 type Props = {
   matrix: SheetMatrix;
-  onChange: (next: SheetMatrix) => void;
+  onChange: (next: SheetMatrix | ((prev: SheetMatrix) => SheetMatrix)) => void;
   height?: number;
   kind?: SheetEditorKind;
 };
@@ -216,6 +215,30 @@ function colLabel(i: number): string {
   return s;
 }
 
+function patchMatrixCell(
+  matrix: SheetMatrix,
+  rowIndex: number,
+  colIndex: number,
+  value: unknown,
+  kind: SheetEditorKind
+): SheetMatrix {
+  const next = matrix.map((row) => [...row]);
+  const row = next[rowIndex];
+  if (!row) return matrix;
+  while (row.length <= colIndex) row.push("");
+  if (kind === "lp" && rowIndex === 1 && colIndex === 0) {
+    row[0] = "Objetivo (Z)";
+  } else {
+    row[colIndex] = value === undefined || value === null ? "" : (value as Cell);
+  }
+  return next;
+}
+
+function colIndexFromField(field: string): number | null {
+  const match = /^c(\d+)$/.exec(field);
+  return match ? Number(match[1]) : null;
+}
+
 export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind = "generic" }: Props) {
   const gridRef = useRef<AgGridReact<RowData>>(null);
   const { cols, rows, headerRow } = useMemo(() => matrixToRows(matrix, kind), [matrix, kind]);
@@ -233,38 +256,37 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
     onChange(rowsToMatrix(next, colCount, headerRow, kind));
   }, [colCount, headerRow, kind, onChange]);
 
+  const commitLpCell = useCallback(
+    (rowIndex: number, colIndex: number, value: unknown) => {
+      onChange((prev) => patchMatrixCell(prev, rowIndex, colIndex, value, kind));
+    },
+    [kind, onChange]
+  );
+
   const onCellValueChanged = useCallback(
     (e: CellValueChangedEvent<RowData>) => {
       if (kind === "lp") {
         const ri = e.node.rowIndex ?? -1;
-        const field = e.column.getColId();
-        const ci = cols.findIndex((c) => c.field === field);
-        if (ci >= 0 && isEmptyCell(e.newValue)) {
-          const filled = coerceLpValue(classifyLpCell(ri, ci, colCount), e.newValue, ci, ri);
-          if (filled !== e.newValue && filled !== "") {
-            e.node.setDataValue(e.column, filled);
-            return;
-          }
+        const ci = colIndexFromField(e.column.getColId());
+        if (ri >= 0 && ci != null) {
+          commitLpCell(ri, ci, e.newValue);
+          return;
         }
       }
       syncFromGrid();
     },
-    [kind, cols, colCount, syncFromGrid]
+    [kind, commitLpCell, syncFromGrid]
   );
 
   const onCellEditingStopped = useCallback(
     (e: CellEditingStoppedEvent<RowData>) => {
-      if (kind !== "lp") return;
+      if (kind !== "lp" || !e.valueChanged) return;
       const ri = e.node.rowIndex ?? -1;
-      const field = e.column.getColId();
-      const ci = cols.findIndex((c) => c.field === field);
-      if (ci < 0) return;
-      const filled = coerceLpValue(classifyLpCell(ri, ci, colCount), e.newValue, ci, ri);
-      if (isEmptyCell(e.newValue) && filled !== e.newValue) {
-        e.node.setDataValue(e.column, filled);
-      }
+      const ci = colIndexFromField(e.column.getColId());
+      if (ri < 0 || ci == null) return;
+      commitLpCell(ri, ci, e.newValue);
     },
-    [kind, cols, colCount]
+    [kind, commitLpCell]
   );
 
   function addRow() {
