@@ -222,8 +222,18 @@ export function emptyEoqSheet(): SheetMatrix {
 /** Plantilla vacía PERT/CPM: 1 actividad. */
 export function emptyPertSheet(): SheetMatrix {
   return [
-    ["Actividad", "Predecesores", "Duración", "Optimista (a)", "Más probable (m)", "Pesimista (b)"],
-    ["A1", "", 0, "", "", ""],
+    [
+      "Actividad",
+      "Predecesores",
+      "Duración",
+      "Optimista (a)",
+      "Más probable (m)",
+      "Pesimista (b)",
+      "Tiempo crash",
+      "Costo normal",
+      "Costo crash",
+    ],
+    ["A1", "", 0, "", "", "", "", "", ""],
   ];
 }
 
@@ -320,8 +330,13 @@ export type PertBody = {
     a?: number | null;
     m?: number | null;
     b?: number | null;
+    crash_time?: number | null;
+    normal_cost?: number | null;
+    crash_cost?: number | null;
   }[];
   target_time?: number | null;
+  crash?: boolean;
+  crash_target?: number | null;
 };
 
 export function pertToSheet(body: PertBody): SheetMatrix {
@@ -332,6 +347,9 @@ export function pertToSheet(body: PertBody): SheetMatrix {
     "Optimista (a)",
     "Más probable (m)",
     "Pesimista (b)",
+    "Tiempo crash",
+    "Costo normal",
+    "Costo crash",
   ];
   const rows = body.activities.map((act) => [
     act.id,
@@ -340,6 +358,9 @@ export function pertToSheet(body: PertBody): SheetMatrix {
     act.a ?? "",
     act.m ?? "",
     act.b ?? "",
+    act.crash_time ?? "",
+    act.normal_cost ?? "",
+    act.crash_cost ?? "",
   ]);
   return [header, ...rows];
 }
@@ -357,6 +378,9 @@ export function sheetToPert(matrix: SheetMatrix, mode: "cpm" | "pert" = "cpm"): 
       const aRaw = str(r[3]);
       const mRaw = str(r[4]);
       const bRaw = str(r[5]);
+      const crashRaw = str(r[6]);
+      const nCostRaw = str(r[7]);
+      const cCostRaw = str(r[8]);
       return {
         id: str(r[0]),
         predecessors: preds,
@@ -364,6 +388,9 @@ export function sheetToPert(matrix: SheetMatrix, mode: "cpm" | "pert" = "cpm"): 
         a: aRaw === "" ? null : num(r[3]),
         m: mRaw === "" ? null : num(r[4]),
         b: bRaw === "" ? null : num(r[5]),
+        crash_time: crashRaw === "" ? null : num(r[6]),
+        normal_cost: nCostRaw === "" ? null : num(r[7]),
+        crash_cost: cCostRaw === "" ? null : num(r[8]),
       };
     });
   return { mode, activities };

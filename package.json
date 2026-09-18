@@ -3,11 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "dev": "concurrently -k -n api,web -c blue,magenta \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:api": "bash scripts/dev-api.sh",
-    "dev:web": "cd web && VITE_API_URL=http://127.0.0.1:8000 npm run dev -- --host 127.0.0.1 --port 5173"
+    "dev": "concurrently -k -n worker,web -c cyan,magenta \"npm run dev:worker\" \"npm run dev:web\"",
+    "dev:worker": "mkdir -p web/dist && wrangler pages dev web/dist --port 8788",
+    "dev:web": "cd web && npm run dev -- --host 127.0.0.1 --port 5173",
+    "dev:python": "bash scripts/dev-api.sh",
+    "build:web": "cd web && npm run build",
+    "test:worker": "vitest run --config worker/vitest.config.ts",
+    "deploy": "npm run build:web && wrangler pages deploy web/dist --project-name=laraops"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.34.0"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "hono": "^4.9.8",
+    "pdf-lib": "^1.17.1"
   }
 }

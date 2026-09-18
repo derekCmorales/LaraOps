@@ -1,0 +1,35 @@
+name: Deploy Cloudflare Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install root (worker + wrangler)
+        run: npm ci
+      - name: Install web
+        run: npm ci --prefix web
+      - name: Worker tests
+        run: npm run test:worker
+      - name: Build SPA
+        run: npm run build:web
+      - name: Deploy Pages
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=laraops
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
