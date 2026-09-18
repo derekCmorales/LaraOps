@@ -305,6 +305,22 @@ textarea {
   line-height: 1.4;
 }
 
+.module-card.is-soon {
+  opacity: 0.62;
+  cursor: default;
+  background: var(--muted-fill);
+}
+
+.module-card.is-soon:hover {
+  border-color: var(--ink-200);
+}
+
+.module-card-soon {
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--ink-400);
+}
+
 /* ——— Module shell ——— */
 .module-shell {
   display: flex;

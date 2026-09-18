@@ -1,0 +1,86 @@
+# Desplegar LaraOps en Cloudflare Pages (plan Free)
+
+Producción es un **solo origen**:
+
+- **Pages** sirve el SPA Vite (`web/dist`).
+- **Pages Functions** (Workers) cubren `/health` y `/api/v1/*`.
+- Dominio: `https://laraops.larasolutions.dev`
+
+No hay base de datos. Los solvers de la oleada 1 (LP, transporte, redes/transbordo, colas, PERT/CPM + aceleración) corren en TypeScript dentro del Worker. El resto del catálogo aparece como “Próximamente”.
+
+## Primera vez
+
+1. Cuenta Cloudflare Free (no hace falta tarjeta).
+2. Instala Wrangler y autentica: `npx wrangler login` (o usa un API token).
+3. Crea el proyecto Pages si no existe:
+
+```bash
+npx wrangler pages project create laraops --production-branch main
+```
+
+4. Build y deploy:
+
+```bash
+npm install
+cd web && npm install && cd ..
+npm run deploy
+```
+
+Quedará algo como `https://laraops.pages.dev`.
+
+## Subdominio `laraops.larasolutions.dev`
+
+El apex `larasolutions.dev` está en otro registrar. En Cloudflare Pages:
+
+1. Proyecto `laraops` → **Custom domains** → `laraops.larasolutions.dev`.
+2. En el DNS del registrar, crea:
+
+```
+CNAME  laraops  laraops.pages.dev
+```
+
+3. Espera el SSL (Universal, Free). No hace falta mover el dominio entero a Cloudflare.
+
+Si el CNAME pide un target distinto, usa el que muestre el dashboard (a veces `<proyecto>.pages.dev`).
+
+## GitHub Actions
+
+El workflow [`.github/workflows/deploy-cloudflare.yml`](../.github/workflows/deploy-cloudflare.yml) despliega en cada push a `main` y en PRs (preview).
+
+Secrets del repo:
+
+- `CLOUDFLARE_API_TOKEN` — token con permiso *Cloudflare Pages: Edit*
+- `CLOUDFLARE_ACCOUNT_ID` — ID de la cuenta
+
+## Local
+
+```bash
+npm install
+cd web && npm install && cd ..
+npm run test:worker
+npm run dev
+```
+
+- UI: http://127.0.0.1:5173 (Vite; `/api` y `/health` se proxifican al Worker)
+- Worker: http://127.0.0.1:8788
+
+La API Python (`npm run dev:python`) sigue disponible como referencia; producción ya no la usa.
+
+## Límites del Free que importan
+
+- ~100 000 peticiones/día al Worker.
+- ~10 ms de CPU por invocación: problemas de clase caben; hay techos (p. ej. 25 variables LP, TSP exacto ≤10 nodos).
+- Sin cold start de instancia: la primera resolución no espera un minuto como en Render Free.
+
+## Añadir un módulo después
+
+1. Porta el solver a `worker/src/modules/<nombre>/solver.ts`.
+2. `register("<nombre>", solve)` en [`worker/src/modules/register.ts`](../worker/src/modules/register.ts).
+3. Marca `enabled` en [`web/src/lib/modulesCatalog.ts`](../web/src/lib/modulesCatalog.ts) (set `WAVE1` o el siguiente).
+4. Tests Vitest en `worker/tests/`.
+
+El frontend ya llama `/api/v1/modules/<api>/solve` same-origin; no hace falta `VITE_API_URL` en Pages.
+
+## Render (fallback)
+
+El Blueprint [`render.yaml`](../render.yaml) y [`docs/deploy-render.md`](deploy-render.md) siguen en el repo por si hace falta el FastAPI completo. No es el camino de producción.
