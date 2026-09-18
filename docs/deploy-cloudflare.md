@@ -52,8 +52,10 @@ Usa Node 22 (Wrangler 4 no corre en Node 20).
 Secrets del repo (obligatorios; sin ellos el job de `main` falla antes de Wrangler):
 
 1. [Settings → Secrets and variables → Actions](https://github.com/derekCmorales/LaraOps/settings/secrets/actions)
-2. `CLOUDFLARE_API_TOKEN` — token con permiso **Account → Cloudflare Pages → Edit**
+2. `CLOUDFLARE_API_TOKEN` — token con permiso **Account → Cloudflare Pages → Edit** (Read no alcanza: lista proyectos pero Cloudflare responde 403 al crear o desplegar)
 3. `CLOUDFLARE_ACCOUNT_ID` — ID de la cuenta
+
+Si el token es Account API Token, evita el template de solo lectura. Tras cambiar permisos, vuelve a pegar el valor en el secret de GitHub y relanza **Actions → Deploy Cloudflare Pages → Run workflow**.
 
 El deploy **solo corre en push a `main`**. Los pull requests ejecutan tests y el build, no Wrangler (los secrets no deben llegar a PRs).
 

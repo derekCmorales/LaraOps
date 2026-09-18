@@ -64,13 +64,17 @@ jobs:
           fi
           if [ "$exists" -eq 0 ]; then
             echo "Creando proyecto Pages laraops (primera vez)."
-            curl -sS -o /tmp/cf-create.json -w "create_http=%{http_code}\n" \
+            http=$(curl -sS -o /tmp/cf-create.json -w "%{http_code}" \
               -X POST "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" \
-              --data '{"name":"laraops","production_branch":"main"}' || true
-            cat /tmp/cf-create.json || true
+              --data '{"name":"laraops","production_branch":"main"}' || true)
+            echo "create_http=${http:-000}"
+            cat /tmp/cf-create.json 2>/dev/null || true
             echo
-            npx wrangler pages project create laraops --production-branch main || true
+            if [ "${http:-000}" != "200" ]; then
+              echo "::error::CLOUDFLARE_API_TOKEN puede listar Pages pero no crear ni desplegar (HTTP ${http:-000}). En Cloudflare → API Tokens, el permiso tiene que ser Account → Cloudflare Pages → Edit (no Read). Luego actualiza el secret del repo y relanza este workflow."
+              exit 1
+            fi
           fi
           npx wrangler pages deploy web/dist --project-name=laraops --commit-dirty=true
