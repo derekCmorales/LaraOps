@@ -55,7 +55,7 @@ jobs:
           exists=0
           if list_json=$(npx wrangler pages project list --json); then
             echo "$list_json"
-            if echo "$list_json" | grep -qE '"name"[[:space:]]*:[[:space:]]*"laraops"'; then
+            if echo "$list_json" | grep -qiE '"(name|Project Name)"[[:space:]]*:[[:space:]]*"laraops"'; then
               echo "El proyecto Pages laraops ya existe."
               exists=1
             fi
@@ -72,9 +72,11 @@ jobs:
             echo "create_http=${http:-000}"
             cat /tmp/cf-create.json 2>/dev/null || true
             echo
-            if [ "${http:-000}" != "200" ]; then
-              echo "::error::CLOUDFLARE_API_TOKEN puede listar Pages pero no crear ni desplegar (HTTP ${http:-000}). En Cloudflare → API Tokens, el permiso tiene que ser Account → Cloudflare Pages → Edit (no Read). Luego actualiza el secret del repo y relanza este workflow."
+            if [ "${http:-000}" = "200" ] || [ "${http:-000}" = "409" ]; then
+              echo "Proyecto Pages laraops listo (HTTP ${http})."
+            else
+              echo "::error::CLOUDFLARE_API_TOKEN no pudo crear el proyecto Pages (HTTP ${http:-000}). En Cloudflare → API Tokens, el permiso tiene que ser Account → Cloudflare Pages → Edit (no Read). Luego actualiza el secret del repo y relanza este workflow."
               exit 1
             fi
           fi
-          npx wrangler pages deploy web/dist --project-name=laraops --commit-dirty=true
+          npx wrangler pages deploy web/dist --project-name=laraops --branch main --commit-dirty=true
