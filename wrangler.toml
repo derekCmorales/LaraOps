@@ -1,0 +1,6 @@
+# Cloudflare Pages (Free) + Functions (Workers) for LaraOps.
+# Custom domain: laraops.larasolutions.dev  (CNAME → laraops.pages.dev)
+name = "laraops"
+compatibility_date = "2025-09-18"
+pages_build_output_dir = "./web/dist"
+compatibility_flags = ["nodejs_compat"]

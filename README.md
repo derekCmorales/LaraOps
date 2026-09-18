@@ -25,10 +25,12 @@ npm install
 npm run dev
 ```
 
-Esto instalará las dependencias necesarias en la raíz y usará `concurrently` para lanzar tanto la API como el frontend de manera simultánea.
+Esto instalará las dependencias necesarias en la raíz y usará `concurrently` para lanzar el Worker (Wrangler en :8788) y el frontend Vite.
 
 - **Web (Interfaz Gráfica)**: http://127.0.0.1:5173
-- **API (Documentación Swagger)**: http://127.0.0.1:8000/docs
+- **API (Worker)**: http://127.0.0.1:8788/health
+
+La API Python sigue disponible con `npm run dev:python` (tests y referencia). Producción usa el Worker.
 
 ### API
 
@@ -118,8 +120,10 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/modules/lp/export.pdf \
 
 Validación con compañeros: ver `docs/validation-session.md` (no cerrar hito 5 sin ≥3 respuestas humanas).
 
-## Despliegue (Render, plan Free)
+## Despliegue (Cloudflare Pages + Workers, plan Free)
 
-No hay base de datos. El frontend es un Static Site y la API un Web Service Free.
+Frontend estático y API (Functions) en el mismo origen. Dominio: `https://laraops.larasolutions.dev`.
 
-Guía paso a paso: [`docs/deploy-render.md`](docs/deploy-render.md). El Blueprint está en `render.yaml`.
+Guía: [`docs/deploy-cloudflare.md`](docs/deploy-cloudflare.md). Config: `wrangler.toml`.
+
+Fallback opcional en Render: [`docs/deploy-render.md`](docs/deploy-render.md) (`render.yaml`).

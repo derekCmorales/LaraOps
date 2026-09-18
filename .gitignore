@@ -23,4 +23,5 @@ htmlcov/
 .idea/
 .vscode/
 *.log
-web/tsconfig.tsbuildinfo
+.wrangler/
+.dev.vars
