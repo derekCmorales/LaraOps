@@ -51,7 +51,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          if npx wrangler pages project list 2>&1 | tee /tmp/cf-projects.txt | grep -E '(^|[[:space:]])laraops([[:space:]]|$)'; then
+          if npx wrangler pages project list --json 2>/dev/null | grep -qE '"name"[[:space:]]*:[[:space:]]*"laraops"'; then
             echo "El proyecto Pages laraops ya existe."
           else
             echo "Creando proyecto Pages laraops (primera vez)."
