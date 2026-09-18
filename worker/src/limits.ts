@@ -4,6 +4,8 @@ export const LIMITS = {
   lpVars: 25,
   lpConstraints: 50,
   transportDim: 20,
+  assignmentDim: 20,
+  eoqGraphPoints: 200,
   networkNodes: 80,
   networkEdges: 200,
   tspExactMax: 10,
