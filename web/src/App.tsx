@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
+import AppFooter from "./components/AppFooter";
 import CommandPalette from "./components/CommandPalette";
 import { MODULE_GROUPS, searchModules } from "./lib/modulesCatalog";
 import AssignmentPage from "./pages/AssignmentPage";
@@ -48,7 +49,7 @@ function TopBar({ onSearch }: { onSearch: () => void }) {
 
 function Home() {
   const [q, setQ] = useState("");
-  const filtered = useMemo(() => searchModules(q, { includeSoon: true }), [q]);
+  const filtered = useMemo(() => searchModules(q), [q]);
   const byGroup = MODULE_GROUPS.map((g) => ({
     group: g,
     modules: filtered.filter((m) => m.group === g),
@@ -73,25 +74,15 @@ function Home() {
         <div key={group} className="module-group">
           <h2 className="module-group-title">{group}</h2>
           <div className="module-grid">
-            {modules.map((m) =>
-              m.enabled ? (
-                <Link key={m.slug} to={m.path} className="module-card">
-                  <div className="module-card-name">
-                    {m.name}
-                    <span className="module-card-arrow">→</span>
-                  </div>
-                  <p className="module-card-methods">{m.methods}</p>
-                </Link>
-              ) : (
-                <div key={m.slug} className="module-card is-soon" aria-disabled="true">
-                  <div className="module-card-name">
-                    {m.name}
-                    <span className="module-card-soon">Próximamente</span>
-                  </div>
-                  <p className="module-card-methods">{m.methods}</p>
+            {modules.map((m) => (
+              <Link key={m.slug} to={m.path} className="module-card">
+                <div className="module-card-name">
+                  {m.name}
+                  <span className="module-card-arrow">→</span>
                 </div>
-              ),
-            )}
+                <p className="module-card-methods">{m.methods}</p>
+              </Link>
+            ))}
           </div>
         </div>
       ))}
@@ -150,6 +141,7 @@ export default function App() {
           <Route path="/facility" element={<FacilityPage />} />
         </Routes>
       </main>
+      <AppFooter />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
   );

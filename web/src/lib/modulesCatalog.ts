@@ -6,10 +6,9 @@ export type ModuleMeta = {
   group: string;
   keywords: string[];
   api: string;
-  enabled: boolean;
+  /** Visible en home y búsqueda (workbench migrado). */
+  migrated: boolean;
 };
-
-const WAVE1 = new Set(["lp", "transport", "networks", "pert-cpm", "queues"]);
 
 export const MODULE_GROUPS = [
   "Optimización",
@@ -30,7 +29,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["lp", "simplex", "lineal", "sensibilidad", "ranging", "precio sombra"],
     api: "lp",
-    enabled: WAVE1.has("lp"),
+    migrated: true,
   },
   {
     slug: "ilp",
@@ -40,7 +39,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["ilp", "entera", "branch", "bound", "binaria", "mip"],
     api: "ilp",
-    enabled: WAVE1.has("ilp"),
+    migrated: false,
   },
   {
     slug: "goal",
@@ -50,7 +49,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["goal", "metas", "gp", "prioridades"],
     api: "goal_programming",
-    enabled: WAVE1.has("goal"),
+    migrated: false,
   },
   {
     slug: "qp",
@@ -60,7 +59,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["cuadrática", "qp", "quadratic"],
     api: "quadratic_programming",
-    enabled: WAVE1.has("qp"),
+    migrated: false,
   },
   {
     slug: "nlp",
@@ -70,7 +69,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["no lineal", "nlp", "nonlinear"],
     api: "nonlinear_programming",
-    enabled: WAVE1.has("nlp"),
+    migrated: false,
   },
   {
     slug: "dp",
@@ -80,7 +79,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["dp", "dinámica", "mochila", "knapsack", "stagecoach", "etapas"],
     api: "dynamic_programming",
-    enabled: WAVE1.has("dp"),
+    migrated: false,
   },
   {
     slug: "transport",
@@ -90,7 +89,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Redes y flujo",
     keywords: ["transporte", "vogel", "modi", "noroeste", "vam"],
     api: "transport",
-    enabled: WAVE1.has("transport"),
+    migrated: true,
   },
   {
     slug: "assignment",
@@ -100,7 +99,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Redes y flujo",
     keywords: ["asignación", "húngaro", "hungarian"],
     api: "assignment",
-    enabled: WAVE1.has("assignment"),
+    migrated: true,
   },
   {
     slug: "networks",
@@ -110,7 +109,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Redes y flujo",
     keywords: ["redes", "dijkstra", "kruskal", "flujo", "tsp", "árbol"],
     api: "networks",
-    enabled: WAVE1.has("networks"),
+    migrated: false,
   },
   {
     slug: "pert-cpm",
@@ -120,7 +119,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Proyectos",
     keywords: ["pert", "cpm", "ruta crítica", "gantt", "proyecto", "crashing"],
     api: "pert_cpm",
-    enabled: WAVE1.has("pert-cpm"),
+    migrated: true,
   },
   {
     slug: "jobs",
@@ -130,7 +129,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Proyectos",
     keywords: ["job", "scheduling", "spt", "edd", "johnson", "makespan"],
     api: "job_scheduling",
-    enabled: WAVE1.has("jobs"),
+    migrated: false,
   },
   {
     slug: "queues",
@@ -140,7 +139,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["colas", "waiting", "mm1", "rho", "lq", "wq"],
     api: "queues",
-    enabled: WAVE1.has("queues"),
+    migrated: false,
   },
   {
     slug: "qss",
@@ -150,7 +149,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["simulación", "colas", "qss", "eventos"],
     api: "queuing_simulation",
-    enabled: WAVE1.has("qss"),
+    migrated: false,
   },
   {
     slug: "markov",
@@ -160,7 +159,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["markov", "transición", "absorbente", "estado estable"],
     api: "markov",
-    enabled: WAVE1.has("markov"),
+    migrated: false,
   },
   {
     slug: "eoq",
@@ -170,7 +169,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["eoq", "pedido", "inventario básico"],
     api: "eoq",
-    enabled: WAVE1.has("eoq"),
+    migrated: true,
   },
   {
     slug: "inventory",
@@ -180,7 +179,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["inventario", "epq", "newsvendor", "wagner", "backorder"],
     api: "inventory",
-    enabled: WAVE1.has("inventory"),
+    migrated: false,
   },
   {
     slug: "mrp",
@@ -190,7 +189,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["mrp", "bom", "materiales"],
     api: "mrp",
-    enabled: WAVE1.has("mrp"),
+    migrated: false,
   },
   {
     slug: "aggregate",
@@ -200,7 +199,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["agregada", "aggregate", "chase", "level"],
     api: "aggregate_planning",
-    enabled: WAVE1.has("aggregate"),
+    migrated: false,
   },
   {
     slug: "facility",
@@ -210,7 +209,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["localización", "layout", "gravedad", "balanceo"],
     api: "facility_location",
-    enabled: WAVE1.has("facility"),
+    migrated: false,
   },
   {
     slug: "forecasting",
@@ -220,7 +219,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Predicción y decisión",
     keywords: ["pronóstico", "holt", "winters", "mape", "forecast"],
     api: "forecasting",
-    enabled: WAVE1.has("forecasting"),
+    migrated: false,
   },
   {
     slug: "decision",
@@ -230,7 +229,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Predicción y decisión",
     keywords: ["decisión", "árbol", "emv", "evpi", "hurwicz", "bayes"],
     api: "decision_analysis",
-    enabled: WAVE1.has("decision"),
+    migrated: false,
   },
   {
     slug: "game",
@@ -240,7 +239,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Predicción y decisión",
     keywords: ["juegos", "silla", "mixta", "dominada"],
     api: "game_theory",
-    enabled: WAVE1.has("game"),
+    migrated: false,
   },
   {
     slug: "quality",
@@ -250,7 +249,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["calidad", "carta", "xbar", "cpk", "control"],
     api: "quality_control",
-    enabled: WAVE1.has("quality"),
+    migrated: false,
   },
   {
     slug: "asa",
@@ -260,7 +259,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["muestreo", "asa", "oc", "aql", "ltpd"],
     api: "acceptance_sampling",
-    enabled: WAVE1.has("asa"),
+    migrated: false,
   },
   {
     slug: "statistics",
@@ -270,7 +269,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["estadística", "regresión", "ttest", "normal"],
     api: "statistics",
-    enabled: WAVE1.has("statistics"),
+    migrated: false,
   },
   {
     slug: "breakeven",
@@ -280,15 +279,16 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["equilibrio", "breakeven", "cvp", "contribución"],
     api: "breakeven",
-    enabled: WAVE1.has("breakeven"),
+    migrated: false,
   },
 ];
 
-export function searchModules(query: string, opts?: { includeSoon?: boolean }): ModuleMeta[] {
-  const pool = opts?.includeSoon ? MODULES : MODULES.filter((m) => m.enabled);
+export const MIGRATED_MODULES = MODULES.filter((m) => m.migrated);
+
+export function searchModules(query: string): ModuleMeta[] {
   const q = query.trim().toLowerCase();
-  if (!q) return pool;
-  return pool.filter((m) => {
+  if (!q) return MIGRATED_MODULES;
+  return MIGRATED_MODULES.filter((m) => {
     const hay = [m.name, m.methods, m.group, ...m.keywords].join(" ").toLowerCase();
     return hay.includes(q) || q.split(/\s+/).every((tok) => hay.includes(tok));
   });
