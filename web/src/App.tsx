@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
+import AppFooter from "./components/AppFooter";
 import CommandPalette from "./components/CommandPalette";
 import { MODULE_GROUPS, searchModules } from "./lib/modulesCatalog";
 import AssignmentPage from "./pages/AssignmentPage";
@@ -140,6 +141,7 @@ export default function App() {
           <Route path="/facility" element={<FacilityPage />} />
         </Routes>
       </main>
+      <AppFooter />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
     </div>
   );

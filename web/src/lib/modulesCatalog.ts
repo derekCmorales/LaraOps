@@ -6,6 +6,8 @@ export type ModuleMeta = {
   group: string;
   keywords: string[];
   api: string;
+  /** Visible en home y búsqueda (workbench migrado). */
+  migrated: boolean;
 };
 
 export const MODULE_GROUPS = [
@@ -27,6 +29,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["lp", "simplex", "lineal", "sensibilidad", "ranging", "precio sombra"],
     api: "lp",
+    migrated: true,
   },
   {
     slug: "ilp",
@@ -36,6 +39,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["ilp", "entera", "branch", "bound", "binaria", "mip"],
     api: "ilp",
+    migrated: false,
   },
   {
     slug: "goal",
@@ -45,6 +49,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["goal", "metas", "gp", "prioridades"],
     api: "goal_programming",
+    migrated: false,
   },
   {
     slug: "qp",
@@ -54,6 +59,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["cuadrática", "qp", "quadratic"],
     api: "quadratic_programming",
+    migrated: false,
   },
   {
     slug: "nlp",
@@ -63,6 +69,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["no lineal", "nlp", "nonlinear"],
     api: "nonlinear_programming",
+    migrated: false,
   },
   {
     slug: "dp",
@@ -72,6 +79,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Optimización",
     keywords: ["dp", "dinámica", "mochila", "knapsack", "stagecoach", "etapas"],
     api: "dynamic_programming",
+    migrated: false,
   },
   {
     slug: "transport",
@@ -81,6 +89,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Redes y flujo",
     keywords: ["transporte", "vogel", "modi", "noroeste", "vam"],
     api: "transport",
+    migrated: true,
   },
   {
     slug: "assignment",
@@ -90,6 +99,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Redes y flujo",
     keywords: ["asignación", "húngaro", "hungarian"],
     api: "assignment",
+    migrated: true,
   },
   {
     slug: "networks",
@@ -99,6 +109,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Redes y flujo",
     keywords: ["redes", "dijkstra", "kruskal", "flujo", "tsp", "árbol"],
     api: "networks",
+    migrated: false,
   },
   {
     slug: "pert-cpm",
@@ -108,6 +119,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Proyectos",
     keywords: ["pert", "cpm", "ruta crítica", "gantt", "proyecto", "crashing"],
     api: "pert_cpm",
+    migrated: true,
   },
   {
     slug: "jobs",
@@ -117,6 +129,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Proyectos",
     keywords: ["job", "scheduling", "spt", "edd", "johnson", "makespan"],
     api: "job_scheduling",
+    migrated: false,
   },
   {
     slug: "queues",
@@ -126,6 +139,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["colas", "waiting", "mm1", "rho", "lq", "wq"],
     api: "queues",
+    migrated: false,
   },
   {
     slug: "qss",
@@ -135,6 +149,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["simulación", "colas", "qss", "eventos"],
     api: "queuing_simulation",
+    migrated: false,
   },
   {
     slug: "markov",
@@ -144,6 +159,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["markov", "transición", "absorbente", "estado estable"],
     api: "markov",
+    migrated: false,
   },
   {
     slug: "eoq",
@@ -153,6 +169,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["eoq", "pedido", "inventario básico"],
     api: "eoq",
+    migrated: true,
   },
   {
     slug: "inventory",
@@ -162,6 +179,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["inventario", "epq", "newsvendor", "wagner", "backorder"],
     api: "inventory",
+    migrated: false,
   },
   {
     slug: "mrp",
@@ -171,6 +189,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["mrp", "bom", "materiales"],
     api: "mrp",
+    migrated: false,
   },
   {
     slug: "aggregate",
@@ -180,6 +199,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["agregada", "aggregate", "chase", "level"],
     api: "aggregate_planning",
+    migrated: false,
   },
   {
     slug: "facility",
@@ -189,6 +209,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Inventarios y producción",
     keywords: ["localización", "layout", "gravedad", "balanceo"],
     api: "facility_location",
+    migrated: false,
   },
   {
     slug: "forecasting",
@@ -198,6 +219,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Predicción y decisión",
     keywords: ["pronóstico", "holt", "winters", "mape", "forecast"],
     api: "forecasting",
+    migrated: false,
   },
   {
     slug: "decision",
@@ -207,6 +229,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Predicción y decisión",
     keywords: ["decisión", "árbol", "emv", "evpi", "hurwicz", "bayes"],
     api: "decision_analysis",
+    migrated: false,
   },
   {
     slug: "game",
@@ -216,6 +239,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Predicción y decisión",
     keywords: ["juegos", "silla", "mixta", "dominada"],
     api: "game_theory",
+    migrated: false,
   },
   {
     slug: "quality",
@@ -225,6 +249,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["calidad", "carta", "xbar", "cpk", "control"],
     api: "quality_control",
+    migrated: false,
   },
   {
     slug: "asa",
@@ -234,6 +259,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["muestreo", "asa", "oc", "aql", "ltpd"],
     api: "acceptance_sampling",
+    migrated: false,
   },
   {
     slug: "statistics",
@@ -243,6 +269,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["estadística", "regresión", "ttest", "normal"],
     api: "statistics",
+    migrated: false,
   },
   {
     slug: "breakeven",
@@ -252,13 +279,16 @@ export const MODULES: ModuleMeta[] = [
     group: "Calidad y estadística",
     keywords: ["equilibrio", "breakeven", "cvp", "contribución"],
     api: "breakeven",
+    migrated: false,
   },
 ];
 
+export const MIGRATED_MODULES = MODULES.filter((m) => m.migrated);
+
 export function searchModules(query: string): ModuleMeta[] {
   const q = query.trim().toLowerCase();
-  if (!q) return MODULES;
-  return MODULES.filter((m) => {
+  if (!q) return MIGRATED_MODULES;
+  return MIGRATED_MODULES.filter((m) => {
     const hay = [m.name, m.methods, m.group, ...m.keywords].join(" ").toLowerCase();
     return hay.includes(q) || q.split(/\s+/).every((tok) => hay.includes(tok));
   });
