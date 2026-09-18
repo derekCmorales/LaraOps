@@ -214,7 +214,8 @@ textarea {
 }
 
 .app-footer-heart {
-  color: var(--pivot);
+  filter: grayscale(1);
+  opacity: 0.55;
 }
 
 .app-footer-contact {
