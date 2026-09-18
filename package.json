@@ -9,7 +9,7 @@
     "dev:python": "bash scripts/dev-api.sh",
     "build:web": "cd web && npm run build",
     "test:worker": "vitest run --config worker/vitest.config.ts",
-    "deploy": "npm run build:web && wrangler pages deploy web/dist --project-name=laraops"
+    "deploy": "npm run build:web && wrangler pages deploy web/dist --project-name=laraops --commit-dirty=true"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
