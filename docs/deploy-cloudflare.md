@@ -45,7 +45,9 @@ Si el CNAME pide un target distinto, usa el que muestre el dashboard (a veces `<
 
 ## GitHub Actions
 
-El workflow [`.github/workflows/deploy-cloudflare.yml`](../.github/workflows/deploy-cloudflare.yml) despliega en cada push a `main` y en PRs (preview).
+El workflow [`.github/workflows/deploy-cloudflare.yml`](../.github/workflows/deploy-cloudflare.yml) corre tests en PRs y **despliega solo en push a `main`**. El primer deploy crea el proyecto Pages `laraops` si aún no existe (queda en `https://laraops.pages.dev`).
+
+Usa Node 22 (Wrangler 4 no corre en Node 20).
 
 Secrets del repo (obligatorios; sin ellos el job de `main` falla antes de Wrangler):
 

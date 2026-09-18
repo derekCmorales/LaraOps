@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - name: Install root (worker + wrangler)
         run: npm ci
@@ -46,8 +46,15 @@ jobs:
           fi
       - name: Deploy Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web/dist --project-name=laraops
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if npx wrangler pages project list --json 2>/dev/null | grep -qE '"name"[[:space:]]*:[[:space:]]*"laraops"'; then
+            echo "El proyecto Pages laraops ya existe."
+          else
+            echo "Creando proyecto Pages laraops (primera vez)."
+            npx wrangler pages project create laraops --production-branch main
+          fi
+          npx wrangler pages deploy web/dist --project-name=laraops --commit-dirty=true
