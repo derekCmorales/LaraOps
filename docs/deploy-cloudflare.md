@@ -47,10 +47,13 @@ Si el CNAME pide un target distinto, usa el que muestre el dashboard (a veces `<
 
 El workflow [`.github/workflows/deploy-cloudflare.yml`](../.github/workflows/deploy-cloudflare.yml) despliega en cada push a `main` y en PRs (preview).
 
-Secrets del repo:
+Secrets del repo (obligatorios; sin ellos el job de `main` falla antes de Wrangler):
 
-- `CLOUDFLARE_API_TOKEN` — token con permiso *Cloudflare Pages: Edit*
-- `CLOUDFLARE_ACCOUNT_ID` — ID de la cuenta
+1. [Settings → Secrets and variables → Actions](https://github.com/derekCmorales/LaraOps/settings/secrets/actions)
+2. `CLOUDFLARE_API_TOKEN` — token con permiso **Account → Cloudflare Pages → Edit**
+3. `CLOUDFLARE_ACCOUNT_ID` — ID de la cuenta
+
+El deploy **solo corre en push a `main`**. Los pull requests ejecutan tests y el build, no Wrangler (los secrets no deben llegar a PRs).
 
 ## Local
 
