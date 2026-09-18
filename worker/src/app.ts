@@ -61,7 +61,7 @@ async function solveModule(mod: string, body: unknown) {
   if (!solver) {
     throw new HttpError(
       501,
-      `module not deployed: ${mod}. Oleada 1: ${listModules().join(", ")}. Añade el solver en worker/src/modules/ y regístralo.`,
+      `module not deployed: ${mod}. Desplegados: ${listModules().join(", ")}. Añade el solver en worker/src/modules/ y regístralo.`,
     );
   }
   return solver(body);

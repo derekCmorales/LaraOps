@@ -12,14 +12,65 @@ describe("http + export", () => {
   });
 
   it("unknown module is 501", async () => {
-    const res = await app.request("/api/v1/modules/eoq/solve", {
+    const res = await app.request("/api/v1/modules/inventory/solve", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ D: 1, S: 1, H: 1 }),
+      body: JSON.stringify({ model: "eoq", D: 1, S: 1, H: 1 }),
     });
     expect(res.status).toBe(501);
     const body = (await res.json()) as { detail: string };
-    expect(body.detail).toContain("eoq");
+    expect(body.detail).toContain("inventory");
+  });
+
+  it("solves eoq over HTTP", async () => {
+    const res = await app.request("/api/v1/modules/eoq/solve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ D: 1000, S: 10, H: 0.5 }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { solution: { metrics: { Q_star: number }; variables: { Q: number } } };
+    expect(body.solution.metrics.Q_star).toBeCloseTo(200, 5);
+    expect(body.solution.variables.Q).toBeCloseTo(200, 5);
+  });
+
+  it("solves assignment over HTTP", async () => {
+    const res = await app.request("/api/v1/modules/assignment/solve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agents: ["A", "B", "C"],
+        tasks: ["X", "Y", "Z"],
+        costs: [
+          [9, 2, 7],
+          [6, 4, 3],
+          [5, 8, 1],
+        ],
+        sense: "min",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { solution: { objective_value: number } };
+    expect(body.solution.objective_value).toBeCloseTo(9, 5);
+  });
+
+  it("exports assignment xlsx", async () => {
+    const res = await app.request("/api/v1/modules/assignment/export.xlsx", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        agents: ["A", "B"],
+        tasks: ["X", "Y"],
+        costs: [
+          [1, 4],
+          [3, 2],
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("spreadsheetml");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(bytes.byteLength).toBeGreaterThan(100);
   });
 
   it("solves queues over HTTP", async () => {

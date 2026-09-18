@@ -6,7 +6,7 @@ Producción es un **solo origen**:
 - **Pages Functions** (Workers) cubren `/health` y `/api/v1/*`.
 - Dominio: `https://laraops.larasolutions.dev`
 
-No hay base de datos. Los solvers de la oleada 1 (LP, transporte, redes/transbordo, colas, PERT/CPM + aceleración) corren en TypeScript dentro del Worker. El resto del catálogo aparece como “Próximamente”.
+No hay base de datos. Los solvers desplegados (LP, transporte, asignación, redes/transbordo, colas, PERT/CPM + aceleración, EOQ) corren en TypeScript dentro del Worker. El resto del catálogo aparece como “Próximamente”.
 
 ## Primera vez
 
@@ -83,7 +83,7 @@ La API Python (`npm run dev:python`) sigue disponible como referencia; producci�
 
 1. Porta el solver a `worker/src/modules/<nombre>/solver.ts`.
 2. `register("<nombre>", solve)` en [`worker/src/modules/register.ts`](../worker/src/modules/register.ts).
-3. Marca `enabled` en [`web/src/lib/modulesCatalog.ts`](../web/src/lib/modulesCatalog.ts) (set `WAVE1` o el siguiente).
+3. Marca `migrated: true` en [`web/src/lib/modulesCatalog.ts`](../web/src/lib/modulesCatalog.ts) para que aparezca en el home.
 4. Tests Vitest en `worker/tests/`.
 
 El frontend ya llama `/api/v1/modules/<api>/solve` same-origin; no hace falta `VITE_API_URL` en Pages.
