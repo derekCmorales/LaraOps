@@ -16,7 +16,7 @@ export default function AppFooter() {
         </a>
         <span className="app-footer-sep" aria-hidden>·</span>
         <span>
-          Cambio u sugerencia:{" "}
+          Cambios o sugerencias:{" "}
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </span>
       </p>
