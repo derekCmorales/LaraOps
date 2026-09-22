@@ -285,13 +285,20 @@ export const MODULES: ModuleMeta[] = [
 
 export const MIGRATED_MODULES = MODULES.filter((m) => m.migrated);
 
-export function searchModules(query: string): ModuleMeta[] {
+function matchesQuery(module: ModuleMeta, query: string): boolean {
   const q = query.trim().toLowerCase();
-  if (!q) return MIGRATED_MODULES;
-  return MIGRATED_MODULES.filter((m) => {
-    const hay = [m.name, m.methods, m.group, ...m.keywords].join(" ").toLowerCase();
-    return hay.includes(q) || q.split(/\s+/).every((tok) => hay.includes(tok));
-  });
+  if (!q) return true;
+  const hay = [module.name, module.methods, module.group, ...module.keywords].join(" ").toLowerCase();
+  return hay.includes(q) || q.split(/\s+/).every((tok) => hay.includes(tok));
+}
+
+export function searchModules(query: string): ModuleMeta[] {
+  return MIGRATED_MODULES.filter((m) => matchesQuery(m, query));
+}
+
+/** Módulos del catálogo que aún no aparecen como activos en el home. */
+export function searchDisabledModules(query: string): ModuleMeta[] {
+  return MODULES.filter((m) => !m.migrated && matchesQuery(m, query));
 }
 
 export function moduleByPath(path: string): ModuleMeta | undefined {

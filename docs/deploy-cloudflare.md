@@ -6,7 +6,7 @@ Producción es un **solo origen**:
 - **Pages Functions** (Workers) cubren `/health` y `/api/v1/*`.
 - Dominio: `https://laraops.larasolutions.dev`
 
-No hay base de datos. Los solvers desplegados (LP, transporte, asignación, redes/transbordo, colas, PERT/CPM + aceleración, EOQ) corren en TypeScript dentro del Worker. En el home aparecen los workbenches con `migrated: true`: LP, transporte, asignación, PERT/CPM, EOQ y teoría de colas.
+No hay base de datos. Los solvers desplegados (LP, transporte, asignación, redes/transbordo, colas, PERT/CPM + aceleración, EOQ) corren en TypeScript dentro del Worker. En el home aparecen los workbenches con `migrated: true`: LP, transporte, asignación, PERT/CPM, EOQ y teoría de colas. El resto queda en un desplegable cerrado, «Módulos no disponibles».
 
 ## Primera vez
 
