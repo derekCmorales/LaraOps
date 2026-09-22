@@ -58,6 +58,7 @@ export type LpBody = {
   include_iterations?: boolean;
   include_sensitivity?: boolean;
   include_graph?: boolean;
+  graph_variables?: string[];
 };
 
 const LP_OBJECTIVE_LABEL = "Objetivo (Z)";

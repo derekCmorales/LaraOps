@@ -30,7 +30,12 @@ class Vertex:
     sources: tuple[str, ...]
 
 
-def build_2d_graph(req: LPRequest, x_star: dict[str, float], z_star: float) -> GraphXY | None:
+def build_2d_graph(
+    req: LPRequest,
+    x_star: dict[str, float],
+    z_star: float,
+    z_offset: float = 0.0,
+) -> GraphXY | None:
     """Feasible-region polygon and clipped constraint lines for two variables."""
     names = _decision_names(req)
     if len(names) != 2:
@@ -114,7 +119,7 @@ def build_2d_graph(req: LPRequest, x_star: dict[str, float], z_star: float) -> G
                     {
                         "x": _clean(v.x),
                         "y": _clean(v.y),
-                        "z": _clean(c1 * v.x + c2 * v.y),
+                        "z": _clean(c1 * v.x + c2 * v.y + z_offset),
                         "sources": list(v.sources),
                     }
                     for v in labeled
@@ -128,7 +133,14 @@ def build_2d_graph(req: LPRequest, x_star: dict[str, float], z_star: float) -> G
             "x": [_clean(ox)],
             "y": [_clean(oy)],
             "role": "point",
-            "meta": [{"x": _clean(ox), "y": _clean(oy), "z": _clean(z_star), "sources": ["óptimo"]}],
+            "meta": [
+                {
+                    "x": _clean(ox),
+                    "y": _clean(oy),
+                    "z": _clean(z_star + z_offset),
+                    "sources": ["óptimo"],
+                }
+            ],
         }
     )
 
@@ -141,7 +153,7 @@ def build_2d_graph(req: LPRequest, x_star: dict[str, float], z_star: float) -> G
         title="Región factible y punto óptimo",
         subtitle=(
             f"Óptimo: {x_name} = {_fmt_num(ox)}, "
-            f"{y_name} = {_fmt_num(oy)}, Z = {_fmt_num(z_star)}"
+            f"{y_name} = {_fmt_num(oy)}, Z = {_fmt_num(z_star + z_offset)}"
         ),
     )
 
@@ -152,8 +164,11 @@ def vertices_named_table(
     oy: float,
     *,
     maximize: bool,
+    oz: float | None = None,
 ) -> NamedTable | None:
     """Corner-point table for the graphical method (evaluate Z at each vertex)."""
+    if graph.kind == "lp3d":
+        return _vertices_table_3d(graph, ox, oy, 0.0 if oz is None else oz, maximize=maximize)
     verts = next((s for s in graph.series if s.get("name") == "vertices"), None)
     meta = verts.get("meta") if verts else None
     if not meta:
@@ -172,6 +187,40 @@ def vertices_named_table(
     return NamedTable(
         name="vertices_feasible",
         columns=[x_name, y_name, "Z", "origen", "optimo"],
+        rows=rows,
+    )
+
+
+def _vertices_table_3d(
+    graph: GraphXY,
+    ox: float,
+    oy: float,
+    oz: float,
+    *,
+    maximize: bool,
+) -> NamedTable | None:
+    verts = next((s for s in graph.series if s.get("name") == "vertices"), None)
+    meta = verts.get("meta") if verts else None
+    if not meta:
+        return None
+    x_name = graph.x_label or "x"
+    y_name = graph.y_label or "y"
+    z_name = graph.z_label or "z"
+    rows: list[list[float | str]] = []
+    for item in meta:
+        x = _clean(float(item["x"]))
+        y = _clean(float(item["y"]))
+        zc = _clean(float(item.get("z", 0.0)))
+        obj = _clean(float(item.get("objective", 0.0)))
+        origen = " ∩ ".join(str(s) for s in item.get("sources") or [])
+        is_opt = (
+            abs(x - ox) <= FEAS_TOL and abs(y - oy) <= FEAS_TOL and abs(zc - oz) <= FEAS_TOL
+        )
+        rows.append([x, y, zc, obj, origen, "sí" if is_opt else ""])
+    rows.sort(key=lambda r: float(r[3]), reverse=maximize)
+    return NamedTable(
+        name="vertices_feasible",
+        columns=[x_name, y_name, z_name, "Z", "origen", "optimo"],
         rows=rows,
     )
 

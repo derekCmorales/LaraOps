@@ -137,7 +137,14 @@ function explain(result: ModuleResult): string {
     );
   }
 
-  if (result.tables?.some((t) => t.name === "vertices_feasible")) {
+  if (result.graph?.kind === "lp3d") {
+    const slice = (result.graph.subtitle ?? "").includes("Fijas en el óptimo");
+    bits.push(
+      slice
+        ? "El gráfico es un corte tridimensional por el óptimo: se dibujan tres variables y las demás quedan fijas en su valor óptimo. Cada cara es una restricción. La tabla de vértices evalúa Z en cada esquina de ese corte."
+        : "El gráfico muestra el poliedro factible en tres variables. Cada cara es una restricción y el plano de color es el nivel de Z en el óptimo. La tabla de vértices evalúa Z en cada esquina."
+    );
+  } else if (result.tables?.some((t) => t.name === "vertices_feasible")) {
     bits.push(
       "La tabla de vértices evalúa Z en cada esquina de la región factible (método gráfico: intersección de rectas). El óptimo es la fila marcada."
     );

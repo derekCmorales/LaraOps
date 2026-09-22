@@ -17,12 +17,17 @@ export type ModuleResult = {
       name: string;
       x: number[];
       y: number[];
+      z?: (number | null)[];
+      i?: number[];
+      j?: number[];
+      k?: number[];
       role?: string;
       equation?: string;
-      meta?: { x: number; y: number; z?: number; sources?: string[] }[];
+      meta?: { x: number; y: number; z?: number; objective?: number; sources?: string[] }[];
     }[];
     x_label?: string;
     y_label?: string;
+    z_label?: string;
     title?: string;
     subtitle?: string;
     kind?: string;

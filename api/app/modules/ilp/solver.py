@@ -9,7 +9,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from app.modules.ilp.models import ILPRequest
-from app.modules.lp.graph_2d import build_2d_graph
+from app.modules.lp.graph_nd import build_lp_graph
 from app.modules.lp.models import ConstraintSense
 from app.modules.lp.solver import collect_var_names
 from app.schemas.common import SolveStatus
@@ -359,8 +359,9 @@ def solve(req: ILPRequest) -> ModuleResult:
         ]
 
     graph = None
-    if status == SolveStatus.optimal and req.include_graph and len(var_names) == 2:
-        graph = build_2d_graph(req, variables, objective)
+    if status == SolveStatus.optimal and req.include_graph and objective is not None:
+        graph, graph_warnings = build_lp_graph(req, variables, float(objective))
+        warnings.extend(graph_warnings)
 
     result = ModuleResult(
         module="integer_programming",

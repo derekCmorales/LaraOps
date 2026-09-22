@@ -12,7 +12,12 @@ const NICE = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 type Plane = { a: number; b: number; rhs: number; source: string; view_clip?: boolean };
 type Vertex = { x: number; y: number; sources: string[] };
 
-export function build2dGraph(req: LPRequest, xStar: Record<string, number>, zStar: number): GraphXY | null {
+export function build2dGraph(
+  req: LPRequest,
+  xStar: Record<string, number>,
+  zStar: number,
+  zOffset = 0,
+): GraphXY | null {
   const names = collectVarNames(req);
   if (names.length !== 2) return null;
   const [xName, yName] = names;
@@ -83,7 +88,7 @@ export function build2dGraph(req: LPRequest, xStar: Record<string, number>, zSta
       meta: labeled.map((v) => ({
         x: clean(v.x),
         y: clean(v.y),
-        z: clean(c1 * v.x + c2 * v.y),
+        z: clean(c1 * v.x + c2 * v.y + zOffset),
         sources: v.sources,
       })),
     });
@@ -93,7 +98,7 @@ export function build2dGraph(req: LPRequest, xStar: Record<string, number>, zSta
     x: [clean(ox)],
     y: [clean(oy)],
     role: "point",
-    meta: [{ x: clean(ox), y: clean(oy), z: clean(zStar), sources: ["óptimo"] }],
+    meta: [{ x: clean(ox), y: clean(oy), z: clean(zStar + zOffset), sources: ["óptimo"] }],
   });
   return {
     type: "xy",
@@ -102,7 +107,7 @@ export function build2dGraph(req: LPRequest, xStar: Record<string, number>, zSta
     x_label: xName,
     y_label: yName,
     title: "Región factible y punto óptimo",
-    subtitle: `Óptimo: ${xName} = ${fmtNum(ox)}, ${yName} = ${fmtNum(oy)}, Z = ${fmtNum(zStar)}`,
+    subtitle: `Óptimo: ${xName} = ${fmtNum(ox)}, ${yName} = ${fmtNum(oy)}, Z = ${fmtNum(zStar + zOffset)}`,
   };
 }
 
@@ -111,7 +116,9 @@ export function verticesNamedTable(
   ox: number,
   oy: number,
   maximize: boolean,
+  oz?: number,
 ): NamedTable | null {
+  if (graph.kind === "lp3d") return verticesTable3d(graph, ox, oy, oz ?? 0, maximize);
   const verts = graph.series.find((s) => s.name === "vertices");
   const meta = (verts?.meta as Record<string, unknown>[] | undefined) ?? null;
   if (!meta?.length) return null;
@@ -127,6 +134,26 @@ export function verticesNamedTable(
   });
   rows.sort((a, b) => (maximize ? Number(b[2]) - Number(a[2]) : Number(a[2]) - Number(b[2])));
   return { name: "vertices_feasible", columns: [xName, yName, "Z", "origen", "optimo"], rows };
+}
+
+function verticesTable3d(graph: GraphXY, ox: number, oy: number, oz: number, maximize: boolean): NamedTable | null {
+  const verts = graph.series.find((s) => s.name === "vertices");
+  const meta = (verts?.meta as Record<string, unknown>[] | undefined) ?? null;
+  if (!meta?.length) return null;
+  const xName = graph.x_label || "x";
+  const yName = graph.y_label || "y";
+  const zName = graph.z_label || "z";
+  const rows: (number | string)[][] = meta.map((item) => {
+    const x = clean(Number(item.x));
+    const y = clean(Number(item.y));
+    const zc = clean(Number(item.z ?? 0));
+    const obj = clean(Number(item.objective ?? 0));
+    const origen = ((item.sources as string[]) ?? []).join(" ∩ ");
+    const isOpt = Math.abs(x - ox) <= FEAS_TOL && Math.abs(y - oy) <= FEAS_TOL && Math.abs(zc - oz) <= FEAS_TOL;
+    return [x, y, zc, obj, origen, isOpt ? "sí" : ""];
+  });
+  rows.sort((a, b) => (maximize ? Number(b[3]) - Number(a[3]) : Number(a[3]) - Number(b[3])));
+  return { name: "vertices_feasible", columns: [xName, yName, zName, "Z", "origen", "optimo"], rows };
 }
 
 function varBounds(req: LPRequest, name: string): [number | null, number | null] {

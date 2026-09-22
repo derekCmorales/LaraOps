@@ -742,6 +742,19 @@ textarea {
   accent-color: var(--basic);
 }
 
+.lp-graph-vars {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--space) * 3);
+}
+
+.lp-graph-vars .field-hint {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
 .data-table .cell-flash {
   animation: cell-flash 400ms ease;
 }
@@ -1411,6 +1424,10 @@ textarea {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior: contain;
+}
+
+.chart-wrap--lp3d {
+  min-height: 640px;
 }
 
 .lp-plotly .modebar {
