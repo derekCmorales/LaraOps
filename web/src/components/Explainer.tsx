@@ -49,9 +49,19 @@ function explain(result: ModuleResult): string {
       `La utilización del sistema es ρ = ${rho.toLocaleString("es-MX", { maximumFractionDigits: 3 })} (proporción del tiempo que los servidores están ocupados).`
     );
   }
-  if (metrics.Lq != null) {
+  if (metrics.Lq != null && Number.isFinite(Number(metrics.Lq))) {
     bits.push(
       `En promedio hay ${Number(metrics.Lq).toLocaleString("es-MX", { maximumFractionDigits: 3 })} clientes esperando en cola.`
+    );
+  }
+  if (metrics.W != null && Number.isFinite(Number(metrics.W))) {
+    bits.push(
+      `El tiempo promedio en el sistema es W = ${Number(metrics.W).toLocaleString("es-MX", { maximumFractionDigits: 3 })}.`
+    );
+  }
+  if (metrics.cost_total != null && Number.isFinite(Number(metrics.cost_total))) {
+    bits.push(
+      `El costo total (espera más servidores) es ${Number(metrics.cost_total).toLocaleString("es-MX", { maximumFractionDigits: 2 })}.`
     );
   }
   if (metrics.Q != null || metrics.Q_star != null || metrics.EOQ != null) {

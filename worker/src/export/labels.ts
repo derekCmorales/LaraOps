@@ -44,6 +44,23 @@ const LABELS: Record<string, string> = {
   durations_after_crash: "Duraciones tras aceleración",
   cost_by_s: "costo por servidores",
   Pn: "Pn",
+  lambda: "tasa de llegada (λ)",
+  mu: "tasa de servicio (μ)",
+  rho: "utilización (ρ)",
+  Lq: "clientes en cola (Lq)",
+  L: "clientes en el sistema (L)",
+  Wq: "espera en cola (Wq)",
+  W: "espera en el sistema (W)",
+  P0: "prob. sistema vacío (P₀)",
+  lambda_eff: "tasa efectiva de llegada (λeff)",
+  cost_waiting: "costo de espera",
+  cost_server: "costo de servidores",
+  cost_total: "costo total",
+  servidores: "servidores",
+  costo_espera: "costo de espera",
+  costo_servidor: "costo de servidores",
+  costo_total: "costo total",
+  óptimo: "óptimo",
 };
 
 export function labelKey(key: string): string {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import AppFooter from "./components/AppFooter";
 import CommandPalette from "./components/CommandPalette";
-import { MODULE_GROUPS, searchModules } from "./lib/modulesCatalog";
+import { MODULE_GROUPS, searchDisabledModules, searchModules, type ModuleMeta } from "./lib/modulesCatalog";
 import AssignmentPage from "./pages/AssignmentPage";
 import EoqPage from "./pages/EoqPage";
 import LpPage from "./pages/LpPage";
@@ -47,13 +47,19 @@ function TopBar({ onSearch }: { onSearch: () => void }) {
   );
 }
 
+function groupModules(modules: ModuleMeta[]) {
+  return MODULE_GROUPS.map((g) => ({
+    group: g,
+    modules: modules.filter((m) => m.group === g),
+  })).filter((g) => g.modules.length);
+}
+
 function Home() {
   const [q, setQ] = useState("");
   const filtered = useMemo(() => searchModules(q), [q]);
-  const byGroup = MODULE_GROUPS.map((g) => ({
-    group: g,
-    modules: filtered.filter((m) => m.group === g),
-  })).filter((g) => g.modules.length);
+  const disabled = useMemo(() => searchDisabledModules(q), [q]);
+  const byGroup = groupModules(filtered);
+  const disabledByGroup = groupModules(disabled);
 
   return (
     <section>
@@ -65,7 +71,7 @@ function Home() {
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, ruta crítica)"
+            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, M/M/1, ruta crítica)"
             aria-label="Buscar módulo"
           />
         </label>
@@ -88,6 +94,33 @@ function Home() {
       ))}
       {!filtered.length && (
         <p style={{ color: "var(--ink-400)" }}>No hay módulos que coincidan con “{q}”.</p>
+      )}
+      {disabled.length > 0 && (
+        <details className="disabled-modules">
+          <summary>
+            Módulos no disponibles
+            <span className="disabled-modules-count">{disabled.length}</span>
+          </summary>
+          <div className="disabled-modules-body">
+            <p className="disabled-modules-note">Aún no se pueden resolver. El listado es solo de referencia.</p>
+            {disabledByGroup.map(({ group, modules }) => (
+              <div key={group} className="module-group">
+                <h2 className="module-group-title">{group}</h2>
+                <div className="module-grid">
+                  {modules.map((m) => (
+                    <article key={m.slug} className="module-card is-soon" aria-disabled="true">
+                      <div className="module-card-name">
+                        {m.name}
+                        <span className="module-card-soon">No disponible</span>
+                      </div>
+                      <p className="module-card-methods">{m.methods}</p>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   );
