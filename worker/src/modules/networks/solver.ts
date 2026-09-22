@@ -81,11 +81,11 @@ export function solve(body: unknown): ModuleResult {
 }
 
 function shortest(req: NetworksRequest): ModuleResult {
-  if (!req.source || !req.sink) throw new SolverError("source and sink required for shortest_path");
-  if (!req.edges.length) throw new SolverError("edges are required for problem=shortest_path");
+  if (!req.source || !req.sink) throw new SolverError("origen y destino son obligatorios para ruta más corta");
+  if (!req.edges.length) throw new SolverError("las aristas son obligatorias para ruta más corta");
   const { dist, prev } = dijkstra(req.nodes, req.edges, req.source, req.directed);
   if (!(req.sink in dist) || dist[req.sink] === Infinity) {
-    throw new SolverError(`No path from ${req.source} to ${req.sink}`);
+    throw new SolverError(`No hay ruta de ${req.source} a ${req.sink}`);
   }
   const path: string[] = [];
   let cur: string | null = req.sink;
@@ -157,7 +157,7 @@ function dijkstra(
 }
 
 function mst(req: NetworksRequest): ModuleResult {
-  if (!req.edges.length) throw new SolverError("edges are required for problem=mst");
+  if (!req.edges.length) throw new SolverError("las aristas son obligatorias para el árbol mínimo");
   const undirected = req.edges.map((e) => ({
     u: e.source,
     v: e.target,
@@ -194,16 +194,16 @@ function mst(req: NetworksRequest): ModuleResult {
   return ok({
     variables: Object.fromEntries(tree.map((e) => [`${e.u}-${e.v}`, e.w])),
     metrics: { mst_weight: total },
-    tables: [{ name: "aristas_mst", columns: ["u", "v", "peso"], rows: tree.map((e) => [e.u, e.v, e.w]) }],
+    tables: [{ name: "aristas_mst", columns: ["origen", "destino", "peso"], rows: tree.map((e) => [e.u, e.v, e.w]) }],
     graph,
   });
 }
 
 function maxFlow(req: NetworksRequest): ModuleResult {
-  if (!req.source || !req.sink) throw new SolverError("source and sink required for max_flow");
-  if (!req.edges.length) throw new SolverError("edges are required for max_flow");
+  if (!req.source || !req.sink) throw new SolverError("origen y destino son obligatorios para flujo máximo");
+  if (!req.edges.length) throw new SolverError("las aristas son obligatorias para flujo máximo");
   if (!req.nodes.includes(req.source) || !req.nodes.includes(req.sink)) {
-    throw new SolverError("source and sink must be in nodes");
+    throw new SolverError("origen y destino deben estar en la lista de nodos");
   }
   const capacities = new Map<string, number>();
   const ck = (u: string, v: string) => `${u}|${v}`;
@@ -336,17 +336,17 @@ function maxFlow(req: NetworksRequest): ModuleResult {
 
 function transshipment(req: NetworksRequest): ModuleResult {
   if (!req.node_supply) {
-    throw new SolverError("node_supply is required for transshipment (positive=supply, negative=demand)");
+    throw new SolverError("node_supply es obligatorio para transbordo (positivo = oferta, negativo = demanda)");
   }
-  if (!req.edges.length) throw new SolverError("edges are required for transshipment");
+  if (!req.edges.length) throw new SolverError("las aristas son obligatorias para transbordo");
   const supplyKeys = Object.keys(req.node_supply).sort();
   const nodeKeys = [...req.nodes].sort();
   if (supplyKeys.join("|") !== nodeKeys.join("|")) {
-    throw new SolverError("node_supply keys must match nodes exactly");
+    throw new SolverError("las claves de node_supply deben coincidir exactamente con los nodos");
   }
   const total = Object.values(req.node_supply).reduce((a, b) => a + b, 0);
   if (Math.abs(total) > 1e-6) {
-    throw new SolverError(`unbalanced network: total supply/demand = ${total}, must sum to 0`);
+    throw new SolverError(`red desbalanceada: oferta/demanda total = ${total}, debe sumar 0`);
   }
 
   const varNames = req.edges.map((e, i) => `f_${i}`);
@@ -386,7 +386,7 @@ function transshipment(req: NetworksRequest): ModuleResult {
     include_graph: false,
   });
   if (lp.status !== "optimal") {
-    throw new SolverError(`transshipment problem is ${lp.status}`);
+    throw new SolverError(`el problema de transbordo es ${lp.status}`);
   }
   const rows: unknown[][] = [];
   const variables: Record<string, number> = {};
@@ -420,10 +420,10 @@ function transshipment(req: NetworksRequest): ModuleResult {
 }
 
 function tsp(req: NetworksRequest): ModuleResult {
-  if (!req.distance_matrix) throw new SolverError("distance_matrix is required for tsp");
+  if (!req.distance_matrix) throw new SolverError("la matriz de distancias es obligatoria para TSP");
   const n = req.distance_matrix.length;
   if (n < 2 || req.distance_matrix.some((row) => row.length !== n)) {
-    throw new SolverError("distance_matrix must be a square n x n matrix with n >= 2");
+    throw new SolverError("la matriz de distancias debe ser cuadrada n × n con n ≥ 2");
   }
   const labels = req.nodes.length === n ? req.nodes : Array.from({ length: n }, (_, i) => `N${i}`);
   const warnings: string[] = [];

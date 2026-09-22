@@ -84,6 +84,57 @@ describe("http + export", () => {
     expect(body.solution.metrics.L).toBeCloseTo(2, 5);
   });
 
+  it("lists networks among deployed modules", async () => {
+    const res = await app.request("/api/v1/modules");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { modules: string[] };
+    expect(body.modules).toContain("networks");
+  });
+
+  it("solves shortest path over HTTP", async () => {
+    const res = await app.request("/api/v1/modules/networks/solve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        problem: "shortest_path",
+        nodes: ["A", "B", "C", "D"],
+        edges: [
+          { source: "A", target: "B", weight: 4 },
+          { source: "A", target: "C", weight: 2 },
+          { source: "B", target: "C", weight: 1 },
+          { source: "B", target: "D", weight: 5 },
+          { source: "C", target: "D", weight: 3 },
+        ],
+        source: "A",
+        sink: "D",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { solution: { metrics: { path_length: number } }; graph: { type: string } };
+    expect(body.solution.metrics.path_length).toBeCloseTo(5, 5);
+    expect(body.graph?.type).toBe("network");
+  });
+
+  it("exports networks xlsx", async () => {
+    const res = await app.request("/api/v1/modules/networks/export.xlsx", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        problem: "mst",
+        nodes: ["A", "B", "C"],
+        edges: [
+          { source: "A", target: "B", weight: 1 },
+          { source: "B", target: "C", weight: 2 },
+          { source: "A", target: "C", weight: 5 },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("spreadsheetml");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(bytes.byteLength).toBeGreaterThan(100);
+  });
+
   it("builds xlsx and pdf bytes", async () => {
     const result = solveLp({
       sense: "max",

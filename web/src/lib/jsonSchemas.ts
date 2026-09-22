@@ -91,14 +91,21 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
   networks: {
     module: "networks",
     title: "Redes",
-    required: ["problem", "nodes", "edges"],
+    required: ["problem", "nodes"],
     example: {
       problem: "shortest_path",
-      nodes: ["A", "B", "C"],
-      edges: [{ source: "A", target: "B", weight: 1 }],
+      nodes: ["A", "B", "C", "D"],
+      edges: [
+        { source: "A", target: "B", weight: 4 },
+        { source: "A", target: "C", weight: 2 },
+        { source: "B", target: "C", weight: 1 },
+        { source: "B", target: "D", weight: 5 },
+        { source: "C", target: "D", weight: 3 },
+      ],
       source: "A",
-      sink: "C",
+      sink: "D",
     },
+    notes: "problem: shortest_path, mst, max_flow, transshipment, tsp. TSP usa distance_matrix; transbordo usa node_supply.",
   },
   jobs: {
     module: "job_scheduling",
@@ -217,8 +224,13 @@ export function validateModuleJson(slug: string, body: unknown): string | null {
   if (slug === "ilp" && obj.constraints != null && !Array.isArray(obj.constraints)) {
     return "El campo «constraints» debe ser un arreglo de restricciones.";
   }
-  if (slug === "networks" && obj.edges != null && !Array.isArray(obj.edges)) {
-    return "El campo «edges» debe ser un arreglo de aristas {source, target, weight}.";
+  if (slug === "networks") {
+    if (obj.problem !== "tsp" && obj.edges != null && !Array.isArray(obj.edges)) {
+      return "El campo «edges» debe ser un arreglo de aristas {source, target, weight}.";
+    }
+    if (obj.problem !== "tsp" && !Array.isArray(obj.edges)) {
+      return "Falta el campo obligatorio «edges».";
+    }
   }
   if (slug === "jobs" && obj.jobs != null && !Array.isArray(obj.jobs)) {
     return "El campo «jobs» debe ser un arreglo de trabajos.";

@@ -23,6 +23,25 @@ describe("networks", () => {
     assertClose(result.solution.metrics.path_length, 4);
   });
 
+  it("UI example shortest path A-C-D length 5", () => {
+    const result = solve({
+      problem: "shortest_path",
+      nodes: ["A", "B", "C", "D"],
+      edges: [
+        { source: "A", target: "B", weight: 4 },
+        { source: "A", target: "C", weight: 2 },
+        { source: "B", target: "C", weight: 1 },
+        { source: "B", target: "D", weight: 5 },
+        { source: "C", target: "D", weight: 3 },
+      ],
+      source: "A",
+      sink: "D",
+    });
+    expect(result.status).toBe("ok");
+    assertClose(result.solution.metrics.path_length, 5);
+    expect(result.graph?.type).toBe("network");
+  });
+
   it("mst", () => {
     const result = solve({
       problem: "mst",
@@ -35,6 +54,7 @@ describe("networks", () => {
       directed: false,
     });
     assertClose(result.solution.metrics.mst_weight, 3);
+    expect(result.tables?.[0]?.columns).toEqual(["origen", "destino", "peso"]);
   });
 
   it("max flow = min cut", () => {

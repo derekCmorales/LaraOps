@@ -220,6 +220,13 @@ const LABELS: Record<string, string> = {
   makespan: "Tiempo total (makespan)",
 
   // PERT / redes
+  path_length: "Longitud de la ruta",
+  mst_weight: "Peso del árbol mínimo",
+  max_flow: "Flujo máximo",
+  min_cut_value: "Valor del corte mínimo",
+  tour_length: "Longitud del recorrido",
+  total_cost: "Costo total",
+  peso: "Peso",
   IT: "Inicio temprano (IT)",
   FT: "Fin temprano (FT)",
   ITa: "Inicio tardío (ITa)",
@@ -484,7 +491,9 @@ const WARNING_PATTERNS: [RegExp, string][] = [
   [/Crash iteration limit/i, "Se alcanzó el límite de iteraciones de aceleración."],
   [/activity .+ requires a,m,b/i, "La actividad requiere tiempos optimista (a), más probable (m) y pesimista (b) en modo PERT."],
   [/node_supply is required/i, "Se requiere oferta/demanda por nodo para transbordo."],
+  [/node_supply es obligatorio/i, "Se requiere oferta/demanda por nodo para transbordo."],
   [/node_supply keys must match/i, "Las claves de oferta/demanda deben coincidir exactamente con los nodos."],
+  [/las claves de node_supply deben coincidir/i, "Las claves de oferta/demanda deben coincidir exactamente con los nodos."],
 ];
 
 const TITLE_PATTERNS: [RegExp, (...m: string[]) => string][] = [

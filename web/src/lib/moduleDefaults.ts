@@ -78,7 +78,7 @@ export const GAME_EX = {
 export const NET_EMPTY = {
   problem: "shortest_path",
   nodes: ["A", "B"],
-  edges: [{ source: "A", target: "B", weight: 1 }],
+  edges: [{ source: "A", target: "B", weight: 1, capacity: 0 }],
   source: "A",
   sink: "B",
 };
@@ -86,14 +86,62 @@ export const NET_EX = {
   problem: "shortest_path",
   nodes: ["A", "B", "C", "D"],
   edges: [
-    { source: "A", target: "B", weight: 4 },
-    { source: "A", target: "C", weight: 2 },
-    { source: "B", target: "C", weight: 1 },
-    { source: "B", target: "D", weight: 5 },
-    { source: "C", target: "D", weight: 3 },
+    { source: "A", target: "B", weight: 4, capacity: 0 },
+    { source: "A", target: "C", weight: 2, capacity: 0 },
+    { source: "B", target: "C", weight: 1, capacity: 0 },
+    { source: "B", target: "D", weight: 5, capacity: 0 },
+    { source: "C", target: "D", weight: 3, capacity: 0 },
   ],
   source: "A",
   sink: "D",
+};
+export const NET_MST_EX = {
+  problem: "mst",
+  nodes: ["A", "B", "C"],
+  edges: [
+    { source: "A", target: "B", weight: 1, capacity: 0 },
+    { source: "B", target: "C", weight: 2, capacity: 0 },
+    { source: "A", target: "C", weight: 5, capacity: 0 },
+  ],
+  source: "A",
+  sink: "C",
+};
+export const NET_FLOW_EX = {
+  problem: "max_flow",
+  nodes: ["S", "A", "T"],
+  edges: [
+    { source: "S", target: "A", weight: 10, capacity: 10 },
+    { source: "A", target: "T", weight: 5, capacity: 5 },
+  ],
+  source: "S",
+  sink: "T",
+};
+export const NET_TRANS_EX = {
+  problem: "transshipment",
+  nodes: ["S1", "S2", "T", "D1", "D2"],
+  edges: [
+    { source: "S1", target: "T", weight: 2, capacity: 60 },
+    { source: "S2", target: "T", weight: 3, capacity: 60 },
+    { source: "T", target: "D1", weight: 1, capacity: 50 },
+    { source: "T", target: "D2", weight: 1, capacity: 70 },
+  ],
+  source: "S1",
+  sink: "D1",
+  node_supply: { S1: 50, S2: 40, T: 0, D1: -30, D2: -60 },
+};
+export const NET_TSP_EX = {
+  problem: "tsp",
+  nodes: ["A", "B", "C", "D", "E"],
+  edges: [] as { source: string; target: string; weight: number; capacity: number }[],
+  source: "A",
+  sink: "A",
+  distance_matrix: [
+    [0, 10, 15, 20, 10],
+    [10, 0, 35, 25, 20],
+    [15, 35, 0, 30, 15],
+    [20, 25, 30, 0, 25],
+    [10, 20, 15, 25, 0],
+  ],
 };
 
 export const MARKOV_EMPTY = {

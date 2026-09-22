@@ -44,6 +44,17 @@ const LABELS: Record<string, string> = {
   durations_after_crash: "Duraciones tras aceleración",
   cost_by_s: "costo por servidores",
   Pn: "Pn",
+  path_length: "longitud de la ruta",
+  mst_weight: "peso del árbol mínimo",
+  max_flow: "flujo máximo",
+  min_cut_value: "valor del corte mínimo",
+  tour_length: "longitud del recorrido",
+  total_cost: "costo total",
+  costo_unitario: "costo unitario",
+  peso: "peso",
+  ruta: "ruta",
+  aristas_mst: "aristas del árbol mínimo",
+  recorrido: "recorrido",
 };
 
 export function labelKey(key: string): string {
