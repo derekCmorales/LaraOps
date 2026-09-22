@@ -71,7 +71,7 @@ function Home() {
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, M/M/1, ruta crítica)"
+            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, Dijkstra, M/M/1, ruta crítica)"
             aria-label="Buscar módulo"
           />
         </label>

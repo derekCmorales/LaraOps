@@ -13,6 +13,7 @@ import {
   exportInventoryXlsx,
   exportMarkovXlsx,
   exportMrpXlsx,
+  exportNetworksPdf,
   exportNetworksXlsx,
   exportQualityXlsx,
   exportQueuesPdf,
@@ -91,6 +92,10 @@ import {
   MRP_EX,
   NET_EMPTY,
   NET_EX,
+  NET_FLOW_EX,
+  NET_MST_EX,
+  NET_TRANS_EX,
+  NET_TSP_EX,
   NLP_EMPTY,
   NLP_EX,
   QC_EMPTY,
@@ -617,72 +622,143 @@ export function GamePage() {
 
 /* ——— Redes ——— */
 
-type EdgeRow = { source: string; target: string; weight: number };
+type EdgeRow = { source: string; target: string; weight: number; capacity: number };
+
+function asEdgeRows(rows: { source: string; target: string; weight?: number; capacity?: number | null }[]): EdgeRow[] {
+  return rows.map((e) => ({
+    source: e.source,
+    target: e.target,
+    weight: e.weight ?? 0,
+    capacity: e.capacity ?? 0,
+  }));
+}
+
+function formatSupply(supply?: Record<string, number> | null): string {
+  if (!supply) return "";
+  return Object.entries(supply)
+    .map(([k, v]) => `${k},${v}`)
+    .join("\n");
+}
+
+function parseSupply(text: string): Record<string, number> | undefined {
+  const node_supply: Record<string, number> = {};
+  text.split("\n").forEach((line) => {
+    const parts = line.trim().split(/[,;\s]+/);
+    const n = parts[0];
+    const v = parts[1];
+    if (n && v != null && v !== "") node_supply[n.trim()] = Number(v) || 0;
+  });
+  return Object.keys(node_supply).length ? node_supply : undefined;
+}
+
+type NetworkExample = {
+  problem: string;
+  nodes: string[];
+  edges: { source: string; target: string; weight: number; capacity: number }[];
+  source: string;
+  sink: string;
+  node_supply?: Record<string, number>;
+  distance_matrix?: number[][];
+};
+
+function exampleForProblem(problem: string): NetworkExample {
+  if (problem === "mst") return NET_MST_EX;
+  if (problem === "max_flow") return NET_FLOW_EX;
+  if (problem === "transshipment") return NET_TRANS_EX;
+  if (problem === "tsp") return NET_TSP_EX;
+  return NET_EX;
+}
 
 export function NetworksPage() {
   const [problem, setProblem] = useState(NET_EMPTY.problem);
   const [nodes, setNodes] = useState(NET_EMPTY.nodes);
-  const [edges, setEdges] = useState<EdgeRow[]>([...NET_EMPTY.edges]);
+  const [edges, setEdges] = useState<EdgeRow[]>(asEdgeRows(NET_EMPTY.edges));
   const [source, setSource] = useState(NET_EMPTY.source);
   const [sink, setSink] = useState(NET_EMPTY.sink);
+  const [directed, setDirected] = useState(true);
   const [nodeSupplyText, setNodeSupplyText] = useState("");
+  const [distance, setDistance] = useState<number[][]>(() =>
+    resizeMatrix([], NET_EMPTY.nodes.length, NET_EMPTY.nodes.length)
+  );
+
+  const needsTerminals = problem === "shortest_path" || problem === "max_flow";
+  const isTsp = problem === "tsp";
+  const isTrans = problem === "transshipment";
+
+  function setNodesKeepingMatrix(next: string[]) {
+    setNodes(next);
+    setDistance((prev) => resizeMatrix(prev, next.length, next.length));
+  }
 
   return (
     <FormModulePage
       group="Redes y flujo"
       title="Redes"
-      blurb="Define nodos y aristas en la cuadrícula. Para transbordo use oferta/demanda por nodo en JSON."
+      blurb="Define nodos y aristas. Ruta corta y flujo máximo usan origen y destino. Transbordo pide oferta/demanda por nodo. TSP usa la matriz de distancias."
       filenameBase="networks"
       schemaSlug="networks"
       buildBody={() => {
         const body: Record<string, unknown> = {
           problem,
           nodes,
-          edges: edges.map((e) => ({ source: e.source, target: e.target, weight: e.weight })),
-          source,
-          sink,
+          directed: isTsp || problem === "mst" ? false : directed,
         };
-        if (nodeSupplyText.trim()) {
-          const node_supply: Record<string, number> = {};
-          nodeSupplyText.split("\n").forEach((line) => {
-            const [n, v] = line.split(/[,;\s]+/);
-            if (n && v) node_supply[n.trim()] = Number(v) || 0;
+        if (!isTsp) {
+          body.edges = edges.map((e) => {
+            const row: Record<string, unknown> = { source: e.source, target: e.target, weight: e.weight };
+            if (e.capacity > 0) row.capacity = e.capacity;
+            return row;
           });
-          if (Object.keys(node_supply).length) body.node_supply = node_supply;
         }
+        if (needsTerminals) {
+          body.source = source;
+          body.sink = sink;
+        }
+        if (isTrans) {
+          const node_supply = parseSupply(nodeSupplyText);
+          if (node_supply) body.node_supply = node_supply;
+        }
+        if (isTsp) body.distance_matrix = distance;
         return body;
       }}
       solve={solveNetworks}
       exportXlsx={exportNetworksXlsx}
+      exportPdf={exportNetworksPdf}
       onLoadExample={() => {
-        setProblem(NET_EX.problem);
-        setNodes([...NET_EX.nodes]);
-        setEdges(NET_EX.edges.map((e) => ({ ...e })));
-        setSource(NET_EX.source);
-        setSink(NET_EX.sink);
-        setNodeSupplyText("");
+        const ex = exampleForProblem(problem);
+        setProblem(ex.problem);
+        setNodes([...ex.nodes]);
+        setEdges(asEdgeRows(ex.edges.length ? ex.edges : [{ source: ex.nodes[0] ?? "", target: ex.nodes[1] ?? "", weight: 0, capacity: 0 }]));
+        setSource(ex.source);
+        setSink(ex.sink);
+        setDirected(ex.problem !== "mst" && ex.problem !== "tsp");
+        setNodeSupplyText(formatSupply(ex.node_supply));
+        setDistance(
+          ex.distance_matrix
+            ? ex.distance_matrix.map((row) => [...row])
+            : resizeMatrix([], ex.nodes.length, ex.nodes.length)
+        );
       }}
       onImportBody={(body) => {
         const b = body as {
           problem?: string;
           nodes?: string[];
-          edges?: EdgeRow[];
+          edges?: { source: string; target: string; weight?: number; capacity?: number | null }[];
           source?: string;
           sink?: string;
+          directed?: boolean;
           node_supply?: Record<string, number>;
+          distance_matrix?: number[][];
         };
         if (b.problem) setProblem(b.problem);
         if (b.nodes) setNodes([...b.nodes]);
-        if (b.edges) setEdges(b.edges.map((e) => ({ ...e, weight: e.weight ?? 0 })));
+        if (b.edges) setEdges(asEdgeRows(b.edges));
         if (b.source) setSource(b.source);
         if (b.sink) setSink(b.sink);
-        if (b.node_supply) {
-          setNodeSupplyText(
-            Object.entries(b.node_supply)
-              .map(([k, v]) => `${k},${v}`)
-              .join("\n")
-          );
-        }
+        if (b.directed != null) setDirected(b.directed);
+        if (b.node_supply) setNodeSupplyText(formatSupply(b.node_supply));
+        if (b.distance_matrix) setDistance(b.distance_matrix.map((row) => [...row]));
+        else if (b.nodes) setDistance((prev) => resizeMatrix(prev, b.nodes!.length, b.nodes!.length));
       }}
     >
       <Section title="Problema">
@@ -695,35 +771,60 @@ export function NetworksPage() {
               { value: "shortest_path", label: "Ruta más corta" },
               { value: "mst", label: "Árbol de expansión mínima" },
               { value: "max_flow", label: "Flujo máximo" },
+              { value: "transshipment", label: "Transbordo" },
               { value: "tsp", label: "TSP" },
             ]}
           />
-          <TextField label="Origen" value={source} onChange={setSource} mono />
-          <TextField label="Destino (sumidero)" value={sink} onChange={setSink} mono />
+          {needsTerminals && (
+            <>
+              <TextField label="Origen" value={source} onChange={setSource} mono />
+              <TextField label="Destino (sumidero)" value={sink} onChange={setSink} mono />
+            </>
+          )}
         </FieldGrid>
-        <StringListField label="Nodos" value={nodes} onChange={setNodes} />
-        <RecordGrid<EdgeRow>
-          label="Aristas"
-          columns={[
-            { key: "source", label: "Origen", type: "text" },
-            { key: "target", label: "Destino", type: "text" },
-            { key: "weight", label: "Peso", type: "number" },
-          ]}
-          rows={edges}
-          onChange={setEdges}
-          emptyRow={() => ({ source: "", target: "", weight: 0 })}
-        />
-        <div className="field">
-          <label>Oferta/demanda por nodo (transbordo, opcional)</label>
-          <textarea
-            value={nodeSupplyText}
-            onChange={(e) => setNodeSupplyText(e.target.value)}
-            rows={3}
-            placeholder="A,10&#10;B,-5"
-            style={{ fontFamily: "var(--font-data)" }}
+        {needsTerminals && (
+          <label className="field-checkbox">
+            <input type="checkbox" checked={directed} onChange={(e) => setDirected(e.target.checked)} />
+            Grafo dirigido
+          </label>
+        )}
+        <StringListField label="Nodos" value={nodes} onChange={setNodesKeepingMatrix} />
+        {!isTsp && (
+          <RecordGrid<EdgeRow>
+            label="Aristas"
+            columns={[
+              { key: "source", label: "Origen", type: "text" },
+              { key: "target", label: "Destino", type: "text" },
+              { key: "weight", label: "Peso / costo", type: "number" },
+              { key: "capacity", label: "Capacidad", type: "number" },
+            ]}
+            rows={edges}
+            onChange={setEdges}
+            emptyRow={() => ({ source: "", target: "", weight: 0, capacity: 0 })}
           />
-          <p className="field-hint">Una línea por nodo: nombre, cantidad (+ oferta, − demanda)</p>
-        </div>
+        )}
+        {isTsp && (
+          <MatrixEditor
+            label="Matriz de distancias"
+            values={distance}
+            rowLabels={nodes}
+            colLabels={nodes}
+            onChange={setDistance}
+          />
+        )}
+        {isTrans && (
+          <div className="field">
+            <label>Oferta/demanda por nodo</label>
+            <textarea
+              value={nodeSupplyText}
+              onChange={(e) => setNodeSupplyText(e.target.value)}
+              rows={4}
+              placeholder="S1,50&#10;D1,-30"
+              style={{ fontFamily: "var(--font-data)" }}
+            />
+            <p className="field-hint">Una línea por nodo: nombre, cantidad (+ oferta, − demanda). Debe sumar 0.</p>
+          </div>
+        )}
       </Section>
     </FormModulePage>
   );

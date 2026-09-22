@@ -70,6 +70,36 @@ function explain(result: ModuleResult): string {
       `La cantidad económica de pedido es Q* = ${Number(q).toLocaleString("es-MX", { maximumFractionDigits: 2 })}.`
     );
   }
+  if (metrics.path_length != null && Number.isFinite(Number(metrics.path_length))) {
+    bits.push(
+      `La ruta más corta tiene longitud ${Number(metrics.path_length).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+    );
+  }
+  if (metrics.mst_weight != null && Number.isFinite(Number(metrics.mst_weight))) {
+    bits.push(
+      `El árbol de expansión mínima pesa ${Number(metrics.mst_weight).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+    );
+  }
+  if (metrics.max_flow != null && Number.isFinite(Number(metrics.max_flow))) {
+    bits.push(
+      `El flujo máximo es ${Number(metrics.max_flow).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+    );
+  }
+  if (metrics.min_cut_value != null && Number.isFinite(Number(metrics.min_cut_value))) {
+    bits.push(
+      `El corte mínimo vale ${Number(metrics.min_cut_value).toLocaleString("es-MX", { maximumFractionDigits: 4 })} (teorema max-flow min-cut).`
+    );
+  }
+  if (metrics.tour_length != null && Number.isFinite(Number(metrics.tour_length))) {
+    bits.push(
+      `El recorrido del viajante tiene longitud ${Number(metrics.tour_length).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+    );
+  }
+  if (result.module === "networks" && metrics.total_cost != null && Number.isFinite(Number(metrics.total_cost))) {
+    bits.push(
+      `El costo total del transbordo es ${Number(metrics.total_cost).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+    );
+  }
 
   if (result.module === "decision_analysis") {
     const fmt = (n: unknown) =>
