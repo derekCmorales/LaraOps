@@ -382,6 +382,62 @@ textarea {
   color: var(--ink-400);
 }
 
+.disabled-modules {
+  margin-top: calc(var(--space) * 2);
+  border-top: var(--border);
+  padding-top: calc(var(--space) * 5);
+}
+
+.disabled-modules summary {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--space) * 3);
+  width: fit-content;
+  padding: calc(var(--space) * 2) calc(var(--space) * 4);
+  border: var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-weight: 600;
+  color: var(--ink-600);
+  cursor: pointer;
+  list-style: none;
+}
+
+.disabled-modules summary::-webkit-details-marker {
+  display: none;
+}
+
+.disabled-modules summary::before {
+  content: "▾";
+  color: var(--ink-400);
+  font-size: 0.85em;
+}
+
+.disabled-modules[open] summary::before {
+  content: "▴";
+}
+
+.disabled-modules summary:focus-visible {
+  outline: 2px solid var(--ink-900);
+  outline-offset: 2px;
+}
+
+.disabled-modules-count {
+  font-size: var(--text-caption);
+  font-weight: 500;
+  color: var(--ink-400);
+}
+
+.disabled-modules-body {
+  margin-top: calc(var(--space) * 5);
+}
+
+.disabled-modules-note {
+  margin: 0 0 calc(var(--space) * 5);
+  font-size: var(--text-caption);
+  color: var(--ink-400);
+}
+
 /* ——— Module shell ——— */
 .module-shell {
   display: flex;

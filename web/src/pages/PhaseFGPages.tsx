@@ -16,6 +16,7 @@ import {
   exportNetworksPdf,
   exportNetworksXlsx,
   exportQualityXlsx,
+  exportQueuesPdf,
   exportQueuesXlsx,
   exportStatisticsPdf,
   exportStatisticsXlsx,
@@ -142,6 +143,7 @@ export function QueuesPage() {
       blurb="Elige el modelo, captura λ y μ, y resuelve. Incluye costos y optimización de servidores cuando aplica."
       filenameBase="queues"
       schemaSlug="queues"
+      exportPdf={exportQueuesPdf}
       buildBody={() => ({
         model,
         lambda,
