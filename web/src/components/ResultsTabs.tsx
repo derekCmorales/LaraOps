@@ -188,7 +188,18 @@ function LpSolutionPane({ result }: Props) {
   );
 }
 
+function metricsCopyVariables(result: ModuleResult): boolean {
+  const vars = result.solution.variables;
+  const metrics = result.solution.metrics;
+  const varKeys = Object.keys(vars);
+  const metricKeys = Object.keys(metrics);
+  if (!varKeys.length || varKeys.length !== metricKeys.length) return false;
+  return metricKeys.every((k) => vars[k] === metrics[k]);
+}
+
 function GenericSolutionPane({ result }: Props) {
+  const mirrored = metricsCopyVariables(result);
+  const showVariables = Object.keys(result.solution.variables).length > 0 && !mirrored;
   return (
     <div>
       {result.warnings?.length > 0 && (
@@ -198,7 +209,7 @@ function GenericSolutionPane({ result }: Props) {
           ))}
         </ul>
       )}
-      {Object.keys(result.solution.variables).length > 0 ? (
+      {showVariables ? (
         <SolutionTable
           caption="Variables"
           columns={["Variable", "Valor"]}
@@ -218,7 +229,7 @@ function GenericSolutionPane({ result }: Props) {
       ) : (
         <p className="field-hint">No hay variables ni métricas en este resultado.</p>
       )}
-      {Object.keys(result.solution.variables).length > 0 &&
+      {showVariables &&
         Object.keys(result.solution.metrics).length > 0 && (
           <SolutionTable
             caption="Métricas"

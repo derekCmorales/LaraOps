@@ -139,7 +139,7 @@ export const MODULES: ModuleMeta[] = [
     group: "Aleatoriedad y espera",
     keywords: ["colas", "waiting", "mm1", "rho", "lq", "wq"],
     api: "queues",
-    migrated: false,
+    migrated: true,
   },
   {
     slug: "qss",
