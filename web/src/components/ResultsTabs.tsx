@@ -17,6 +17,18 @@ import JsonTable from "./JsonTable";
 
 type Props = { result: ModuleResult };
 
+function vertexTextColumns(columns: string[]): number[] {
+  const idx = columns
+    .map((column, index) => (column === "origen" || column === "optimo" ? index : -1))
+    .filter((index) => index >= 0);
+  return idx.length ? idx : [3, 4];
+}
+
+function vertexValueColumns(columns: string[]): string[] {
+  const cut = columns.findIndex((column) => column === "origen" || column === "optimo");
+  return columns.slice(0, cut < 0 ? columns.length : cut);
+}
+
 type SensitivityData = {
   constraint_analysis?: Record<string, unknown>[];
   objective_ranges?: Record<string, unknown>[];
@@ -162,14 +174,21 @@ function LpSolutionPane({ result }: Props) {
       {multipleOptima && optimalVertices.length > 1 && (
         <SolutionTable
           caption="Vértices óptimos alternativos"
-          columns={
-            result.tables?.find((t) => t.name === "vertices_feasible")?.columns.slice(0, 3) ?? [
-              "x",
-              "y",
-              "Z",
-            ]
+          columns={labelColumns(
+            vertexValueColumns(
+              result.tables?.find((t) => t.name === "vertices_feasible")?.columns ?? ["x", "y", "Z"],
+            ),
+          )}
+          rows={
+            optimalVertices.map((row) =>
+              row.slice(
+                0,
+                vertexValueColumns(
+                  result.tables?.find((t) => t.name === "vertices_feasible")?.columns ?? [],
+                ).length,
+              ),
+            ) as (string | number)[][]
           }
-          rows={optimalVertices.map((row) => row.slice(0, 3)) as (string | number)[][]}
         />
       )}
       {result.tables
@@ -180,7 +199,7 @@ function LpSolutionPane({ result }: Props) {
             caption={tableName(t.name)}
             columns={labelColumns(t.columns)}
             rows={labelTableRows(t.rows) as (string | number | boolean | null)[][]}
-            textColumns={[3, 4]}
+            textColumns={vertexTextColumns(t.columns)}
           />
         ))}
       <Explainer result={result} />
@@ -246,7 +265,7 @@ function GenericSolutionPane({ result }: Props) {
             caption={tableName(t.name)}
             columns={labelColumns(t.columns)}
             rows={labelTableRows(t.rows) as (string | number | boolean | null)[][]}
-            textColumns={[3, 4]}
+            textColumns={vertexTextColumns(t.columns)}
           />
         ))}
       <Explainer result={result} />

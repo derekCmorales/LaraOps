@@ -15,6 +15,8 @@ export type LPRequest = {
   objective: Record<string, number>;
   constraints: LPConstraint[];
   variable_names?: string[] | null;
+  /** 2 = corte plano, 3 = poliedro. El resto se fija en el óptimo. */
+  graph_variables?: string[] | null;
   bounds?: Record<string, [number | null, number | null]> | null;
   include_iterations?: boolean;
   include_sensitivity?: boolean;
@@ -56,6 +58,7 @@ export function parseLpRequest(body: unknown): LPRequest {
     objective: numMap(o.objective),
     constraints,
     variable_names: Array.isArray(o.variable_names) ? o.variable_names.map(String) : null,
+    graph_variables: Array.isArray(o.graph_variables) ? o.graph_variables.map(String).filter(Boolean) : null,
     bounds: parseBounds(o.bounds),
     include_iterations: o.include_iterations !== false,
     include_sensitivity: o.include_sensitivity !== false,

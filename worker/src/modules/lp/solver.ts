@@ -1,7 +1,8 @@
 import { columns, invert, pinv, matvec, vecmat, cloneMat } from "../../linalg";
 import type { IterationStep, ModuleResult, SensitivityBlock } from "../../schema";
 import { okResult } from "../../schema";
-import { build2dGraph, verticesNamedTable } from "./graph2d";
+import { verticesNamedTable } from "./graph2d";
+import { buildLpGraph } from "./graphNd";
 import { computeSensitivity } from "./sensitivity";
 import { collectVarNames, parseLpRequest, type LPRequest } from "./types";
 
@@ -209,11 +210,14 @@ export function solveLp(req: LPRequest): ModuleResult {
   let graph = null;
   let tables = null;
   if (req.include_graph) {
-    graph = build2dGraph(req, variables, zUser);
+    const built = buildLpGraph(req, variables, zUser);
+    graph = built.graph;
+    warnings.push(...built.warnings);
     if (graph) {
       const xName = graph.x_label ?? varNames[0];
       const yName = graph.y_label ?? varNames[1];
-      const vertexTable = verticesNamedTable(graph, variables[xName] ?? 0, variables[yName] ?? 0, maximize);
+      const oz = graph.z_label ? (variables[graph.z_label] ?? 0) : undefined;
+      const vertexTable = verticesNamedTable(graph, variables[xName] ?? 0, variables[yName] ?? 0, maximize, oz);
       tables = vertexTable ? [vertexTable] : null;
     }
   }

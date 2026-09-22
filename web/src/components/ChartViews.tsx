@@ -18,6 +18,7 @@ import { labelOf } from "../lib/resultLabels";
 import SolutionTable from "./SolutionTable";
 
 const LpGraphView = lazy(() => import("./LpGraphView"));
+const LpGraph3DView = lazy(() => import("./LpGraph3DView"));
 
 class ChartErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -706,6 +707,15 @@ export default function ChartViews({ result }: { result: ModuleResult }) {
       <p className="field-hint">
         Este módulo no generó un gráfico para este resultado. Revisa Solución o Tablas.
       </p>
+    );
+  }
+  if (t === "xy" && result.graph.kind === "lp3d") {
+    return (
+      <ChartErrorBoundary>
+        <Suspense fallback={<p className="field-hint">Cargando gráfico 3D…</p>}>
+          <LpGraph3DView result={result} />
+        </Suspense>
+      </ChartErrorBoundary>
     );
   }
   if (t === "xy" && result.graph.kind === "lp2d") {

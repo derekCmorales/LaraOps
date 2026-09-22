@@ -26,6 +26,7 @@ export type GraphXY = {
   series: Record<string, unknown>[];
   x_label?: string;
   y_label?: string;
+  z_label?: string;
   title?: string;
   subtitle?: string;
   kind?: string;

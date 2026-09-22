@@ -25,7 +25,7 @@ export const MODULES: ModuleMeta[] = [
     slug: "lp",
     path: "/lp",
     name: "Programación lineal",
-    methods: "Simplex, sensibilidad, gráfico con 2 variables",
+    methods: "Simplex, sensibilidad, gráfico 2D y 3D",
     group: "Optimización",
     keywords: ["lp", "simplex", "lineal", "sensibilidad", "ranging", "precio sombra"],
     api: "lp",

@@ -96,4 +96,51 @@ describe("lp", () => {
     const optIdx = table!.columns.indexOf("optimo");
     expect(String(intersection![optIdx]).toLowerCase()).toMatch(/sí|si|yes|1/);
   });
+
+  it("draws a 3D polyhedron for three variables", () => {
+    const result = solve({
+      sense: "max",
+      objective: { x: 1, y: 1, z: 1 },
+      constraints: [
+        { id: "Rx", coeffs: { x: 1 }, sense: "<=", rhs: 1 },
+        { id: "Ry", coeffs: { y: 1 }, sense: "<=", rhs: 1 },
+        { id: "Rz", coeffs: { z: 1 }, sense: "<=", rhs: 1 },
+      ],
+      variable_names: ["x", "y", "z"],
+    });
+    expect(result.status).toBe("optimal");
+    const graph = result.graph;
+    if (!graph || graph.type !== "xy") throw new Error("se esperaba un gráfico xy");
+    expect(graph.kind).toBe("lp3d");
+    expect(graph.z_label).toBe("z");
+    const vertices = graph.series.find((s) => s.name === "vertices");
+    const meta = (vertices?.meta as { x: number; y: number; z: number }[] | undefined) ?? [];
+    expect(meta).toHaveLength(8);
+    const table = result.tables?.find((t) => t.name === "vertices_feasible");
+    expect(table?.columns.slice(0, 4)).toEqual(["x", "y", "z", "Z"]);
+    const marked = table?.rows.filter((row) => row[row.length - 1] === "sí");
+    expect(marked).toHaveLength(1);
+  });
+
+  it("slices four variables through the optimum", () => {
+    const result = solve({
+      sense: "max",
+      objective: { x: 3, y: 2, z: 1, w: 4 },
+      constraints: [
+        { id: "R1", coeffs: { x: 1, y: 1, z: 1, w: 1 }, sense: "<=", rhs: 6 },
+        { id: "Rx", coeffs: { x: 1 }, sense: "<=", rhs: 2 },
+        { id: "Ry", coeffs: { y: 1 }, sense: "<=", rhs: 2 },
+        { id: "Rz", coeffs: { z: 1 }, sense: "<=", rhs: 2 },
+        { id: "Rw", coeffs: { w: 1 }, sense: "<=", rhs: 2 },
+      ],
+      variable_names: ["x", "y", "z", "w"],
+      graph_variables: ["x", "y", "z"],
+    });
+    const graph = result.graph;
+    if (!graph || graph.type !== "xy") throw new Error("se esperaba un gráfico xy");
+    expect(graph.kind).toBe("lp3d");
+    expect(graph.title).toBe("Corte 3D por el óptimo");
+    expect(graph.subtitle ?? "").toContain("w = 2");
+    assertClose(result.solution.objective_value ?? NaN, 18, ATOL);
+  });
 });

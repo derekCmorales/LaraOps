@@ -12,6 +12,6 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ["plotly.js-basic-dist", "react-plotly.js"],
+    include: ["plotly.js-basic-dist", "plotly.js-gl3d-dist", "react-plotly.js"],
   },
 });

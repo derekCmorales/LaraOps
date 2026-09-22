@@ -9,3 +9,4 @@ interface ImportMeta {
 }
 
 declare module "plotly.js-basic-dist";
+declare module "plotly.js-gl3d-dist";

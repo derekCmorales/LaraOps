@@ -38,9 +38,10 @@ class GraphXY(BaseModel):
     # series item: {"name": str, "x": list[float], "y": list[float]}
     x_label: str = ""
     y_label: str = ""
+    z_label: str = ""
     title: str = ""
     subtitle: str = ""
-    # kind hint for UI: "line" | "bar" | "area" | "control" | "sawtooth" | "lp2d" | ""
+    # kind hint for UI: "line" | "bar" | "area" | "control" | "sawtooth" | "lp2d" | "lp3d" | ""
     kind: str = ""
 
 

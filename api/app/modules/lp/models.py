@@ -24,6 +24,8 @@ class LPRequest(BaseModel):
     objective: dict[str, float]  # var_name -> c_j
     constraints: list[LPConstraint]
     variable_names: list[str] | None = None  # optional order; else sorted keys
+    # Variables a dibujar (2 = corte plano, 3 = poliedro). El resto se fija en el óptimo.
+    graph_variables: list[str] | None = None
     bounds: dict[str, tuple[float | None, float | None]] | None = None
     # default bounds: (0, None) for all vars appearing in objective/constraints
     include_iterations: bool = True

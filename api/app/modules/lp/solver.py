@@ -6,7 +6,8 @@ from typing import Any
 import numpy as np
 from scipy.optimize import linprog
 
-from app.modules.lp.graph_2d import build_2d_graph, vertices_named_table
+from app.modules.lp.graph_2d import vertices_named_table
+from app.modules.lp.graph_nd import build_lp_graph
 from app.modules.lp.models import ConstraintSense, LPRequest
 from app.modules.lp.sensitivity import compute_sensitivity
 from app.schemas.common import SolveStatus
@@ -229,12 +230,15 @@ def solve(req: LPRequest) -> ModuleResult:
     graph = None
     tables = None
     if req.include_graph:
-        graph = build_2d_graph(req, variables, z_user)
+        graph, graph_warnings = build_lp_graph(req, variables, z_user)
+        warnings.extend(graph_warnings)
         if graph is not None:
-            x_name, y_name = (graph.x_label, graph.y_label)
+            x_name = graph.x_label or ""
+            y_name = graph.y_label or ""
             ox = float(variables.get(x_name, 0.0))
             oy = float(variables.get(y_name, 0.0))
-            vertex_table = vertices_named_table(graph, ox, oy, maximize=maximize)
+            oz = float(variables.get(graph.z_label, 0.0)) if graph.z_label else None
+            vertex_table = vertices_named_table(graph, ox, oy, maximize=maximize, oz=oz)
             tables = [vertex_table] if vertex_table is not None else None
 
     # Cross-check vs scipy (informational warning only if mismatch)
