@@ -115,7 +115,7 @@ export const MODULES: ModuleMeta[] = [
     slug: "pert-cpm",
     path: "/pert-cpm",
     name: "PERT/CPM",
-    methods: "Ruta crítica, Gantt, aceleración",
+    methods: "Ruta crítica, PERT, Gantt, aceleración",
     group: "Proyectos",
     keywords: ["pert", "cpm", "ruta crítica", "gantt", "proyecto", "crashing"],
     api: "pert_cpm",

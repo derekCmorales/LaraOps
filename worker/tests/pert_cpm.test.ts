@@ -47,6 +47,70 @@ describe("pert_cpm", () => {
     expect(result.iterations?.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("rejects the spreadsheet invalid-number token", () => {
+    expect(() =>
+      solve({
+        mode: "cpm",
+        activities: [{ id: "A", predecessors: [], duration: "Invalid Number" }],
+      }),
+    ).toThrow(/número válido/i);
+  });
+
+  it("accepts comma decimals in duration", () => {
+    const result = solve({
+      mode: "cpm",
+      activities: [
+        { id: "A", predecessors: [], duration: "1,5" },
+        { id: "B", predecessors: ["A"], duration: "2.5" },
+      ],
+    });
+    expect(result.solution.metrics.project_duration).toBeCloseTo(4);
+    const cp = result.tables?.find((t) => t.name === "critical_path");
+    expect(cp?.rows.map((r) => r[1])).toEqual(["A", "B"]);
+  });
+
+  it("PERT probability uses expected time", () => {
+    const result = solve({
+      mode: "pert",
+      target_time: 2,
+      activities: [{ id: "A", predecessors: [], a: 1, m: 2, b: 3 }],
+    });
+    expect(result.solution.metrics.project_te).toBeCloseTo(2);
+    expect(result.solution.metrics.project_variance).toBeCloseTo(1 / 9);
+    expect(result.solution.metrics.prob_meet_target).toBeCloseTo(0.5, 2);
+  });
+
+  it("does not pay to crash past a parallel activity that cannot be shortened", () => {
+    const result = solve({
+      mode: "cpm",
+      crash: true,
+      crash_target: 5,
+      activities: [
+        { id: "A", predecessors: [], duration: 10, crash_time: 0, normal_cost: 0, crash_cost: 50 },
+        { id: "B", predecessors: [], duration: 8 },
+      ],
+    });
+    expect(result.status).toBe("infeasible");
+    expect(result.solution.metrics.project_duration).toBeCloseTo(8);
+    expect(result.solution.metrics.crash_total_cost).toBeCloseTo(10);
+  });
+
+  it("crashes parallel critical paths together", () => {
+    const result = solve({
+      mode: "cpm",
+      crash: true,
+      crash_target: 8,
+      activities: [
+        { id: "A", predecessors: [], duration: 10, crash_time: 6, normal_cost: 0, crash_cost: 20 },
+        { id: "B", predecessors: [], duration: 10, crash_time: 6, normal_cost: 0, crash_cost: 40 },
+      ],
+    });
+    expect(result.status).toBe("ok");
+    expect(result.solution.metrics.project_duration).toBeCloseTo(8);
+    expect(result.solution.metrics.crash_total_cost).toBeCloseTo(30);
+    expect(result.iterations?.[0]?.meta?.activity).toBe("A, B");
+  });
+
   it("crash infeasible status", () => {
     const result = solve({
       mode: "cpm",

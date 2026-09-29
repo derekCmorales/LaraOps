@@ -402,19 +402,175 @@ function GraphXYView({ result }: { result: ModuleResult }) {
   );
 }
 
+type NetNode = {
+  id: string;
+  critical?: boolean;
+  absorbing?: boolean;
+  kind?: string;
+  value?: number;
+  root?: boolean;
+  supply_demand?: number;
+  duration?: number;
+  es?: number;
+  ef?: number;
+  ls?: number;
+  lf?: number;
+  slack?: number;
+};
+
+function rectEdge(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  hw: number,
+  hh: number,
+): { x: number; y: number } {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return { x: from.x + hw, y: from.y };
+  const scale = Math.min(hw / Math.abs(dx), hh / Math.abs(dy));
+  return { x: from.x + dx * scale, y: from.y + dy * scale };
+}
+
+function AonNetwork({
+  result,
+  nodes,
+  edges,
+}: {
+  result: ModuleResult;
+  nodes: NetNode[];
+  edges: { source: string; target: string; critical?: boolean }[];
+}) {
+  const graph = result.graph as Graph;
+  const w = Math.max(880, nodes.length * 170);
+  const h = Math.max(460, nodes.length * 108);
+  const pos = layoutNodes(nodes, edges, w, h);
+  const hw = 62;
+  const hh = 38;
+  const title = chartTitle(graph, result.module);
+  return (
+    <ChartShell
+      title={title}
+      subtitle={graph.subtitle || "Actividades en los nodos. Magenta = ruta crítica."}
+      ariaLabel={title}
+      legend={
+        <p className="chart-legend">
+          <span className="legend-crit">■ Ruta crítica</span>
+          <span className="legend-flow">■ Con holgura</span>
+          <span>ES / EF arriba · LS / LF abajo</span>
+        </p>
+      }
+    >
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" className="network-svg">
+        <defs>
+          <marker id="aon-arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill={C.muted} />
+          </marker>
+          <marker id="aon-arrow-crit" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6 Z" fill={C.pivot} />
+          </marker>
+        </defs>
+        {edges.map((edge, index) => {
+          const a = pos.get(edge.source);
+          const b = pos.get(edge.target);
+          if (!a || !b) return null;
+          const start = rectEdge(a, b, hw, hh);
+          const end = rectEdge(b, a, hw, hh);
+          return (
+            <line
+              key={`${edge.source}-${edge.target}-${index}`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+              stroke={edge.critical ? C.pivot : C.grid}
+              strokeWidth={edge.critical ? 2.4 : 1.5}
+              markerEnd={edge.critical ? "url(#aon-arrow-crit)" : "url(#aon-arrow)"}
+            />
+          );
+        })}
+        {nodes.map((node) => {
+          const p = pos.get(node.id);
+          if (!p) return null;
+          const crit = Boolean(node.critical);
+          return (
+            <g key={node.id}>
+              <rect
+                x={p.x - hw}
+                y={p.y - hh}
+                width={hw * 2}
+                height={hh * 2}
+                rx={4}
+                fill={crit ? "#FDE7F1" : C.paper}
+                stroke={crit ? C.pivot : C.basic}
+                strokeWidth={crit ? 2 : 1.4}
+              />
+              <text x={p.x - hw + 8} y={p.y - hh + 14} fontSize="10" fill={C.muted} style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+                {node.es != null ? fmt(node.es) : ""}
+              </text>
+              <text x={p.x + hw - 8} y={p.y - hh + 14} fontSize="10" fill={C.muted} textAnchor="end" style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+                {node.ef != null ? fmt(node.ef) : ""}
+              </text>
+              <text x={p.x} y={p.y - 2} textAnchor="middle" fontSize="14" fontWeight="700" fill={crit ? C.pivot : C.ink} style={{ fontFamily: "Sora, Manrope, sans-serif" }}>
+                {node.id.length > 10 ? `${node.id.slice(0, 9)}…` : node.id}
+              </text>
+              <text x={p.x} y={p.y + 12} textAnchor="middle" fontSize="10" fill={C.ink} style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+                {node.duration != null ? `d ${fmt(node.duration)}` : ""}
+              </text>
+              <text x={p.x - hw + 8} y={p.y + hh - 8} fontSize="10" fill={C.muted} style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+                {node.ls != null ? fmt(node.ls) : ""}
+              </text>
+              <text x={p.x + hw - 8} y={p.y + hh - 8} fontSize="10" fill={C.muted} textAnchor="end" style={{ fontFamily: "IBM Plex Mono, monospace" }}>
+                {node.lf != null ? fmt(node.lf) : ""}
+              </text>
+              <title>
+                {`${node.id}: duración ${node.duration != null ? fmt(node.duration) : "—"}, ES ${node.es != null ? fmt(node.es) : "—"}, EF ${node.ef != null ? fmt(node.ef) : "—"}, holgura ${node.slack != null ? fmt(node.slack) : "—"}`}
+              </title>
+            </g>
+          );
+        })}
+      </svg>
+    </ChartShell>
+  );
+}
+
+function ganttFromTables(result: ModuleResult): ModuleResult | null {
+  const table = result.tables?.find((item) => item.name === "gantt");
+  if (!table) return null;
+  const col = (name: string) => table.columns.indexOf(name);
+  const idI = col("actividad") >= 0 ? col("actividad") : col("id");
+  const startI = col("inicio");
+  const endI = col("fin");
+  const critI = col("critica") >= 0 ? col("critica") : col("crítica");
+  const slackI = col("holgura");
+  if (idI < 0 || startI < 0 || endI < 0) return null;
+  return {
+    ...result,
+    graph: {
+      type: "gantt",
+      bars: table.rows.map((row) => ({
+        id: String(row[idI]),
+        start: Number(row[startI]),
+        end: Number(row[endI]),
+        critical: Boolean(row[critI]),
+        slack: slackI >= 0 ? Number(row[slackI]) : undefined,
+      })),
+      title: "Diagrama de Gantt",
+      subtitle: "Magenta = ruta crítica · la banda gris es la holgura",
+      x_label: "Tiempo",
+    },
+  };
+}
+
 function GraphNetworkView({ result }: { result: ModuleResult }) {
   const graph = result.graph as Graph;
   if (!graph?.nodes?.length) return null;
 
-  const nodes = graph.nodes as {
-    id: string;
-    critical?: boolean;
-    absorbing?: boolean;
-    kind?: string;
-    value?: number;
-    root?: boolean;
-    supply_demand?: number;
-  }[];
+  const nodes = graph.nodes as NetNode[];
+  const earlyEdges = (graph.edges || []) as { source: string; target: string; critical?: boolean }[];
+  if (nodes.some((node) => typeof node.es === "number" && typeof node.duration === "number")) {
+    return <AonNetwork result={result} nodes={nodes} edges={earlyEdges} />;
+  }
+
   const edges = (graph.edges || []) as {
     source: string;
     target: string;
@@ -746,6 +902,15 @@ export default function ChartViews({ result }: { result: ModuleResult }) {
   }
   if (t === "xy") return <GraphXYView result={result} />;
   if (t === "matrix") return <GraphMatrixView result={result} />;
+  if (result.module === "pert_cpm") {
+    const gantt = result.graph?.type === "gantt" ? result : ganttFromTables(result);
+    return (
+      <div className="pert-visuals">
+        {gantt ? <GraphGanttView result={gantt} /> : null}
+        {t === "network" ? <GraphNetworkView result={result} /> : null}
+      </div>
+    );
+  }
   if (t === "network") return <GraphNetworkView result={result} />;
   if (t === "gantt") return <GraphGanttView result={result} />;
   return (

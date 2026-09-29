@@ -5,7 +5,56 @@ type Props = {
   result: ModuleResult;
 };
 
+function fmtNum(value: unknown): string {
+  return Number(value).toLocaleString("es-MX", { maximumFractionDigits: 4 });
+}
+
+function explainPert(result: ModuleResult): string {
+  const metrics = result.solution.metrics || {};
+  const duration = metrics.project_duration;
+  const bits: string[] = [];
+  if (result.status.toLowerCase() === "infeasible") {
+    bits.push(
+      `No se alcanza la duración pedida. Con los tiempos crash disponibles el proyecto queda en ${fmtNum(duration)}.`
+    );
+  } else if (duration != null && Number.isFinite(Number(duration))) {
+    bits.push(
+      `La duración del proyecto es ${fmtNum(duration)}. Es el camino más largo: cualquier retraso en la ruta crítica retrasa el fin.`
+    );
+  }
+  if (metrics.project_std != null && Number.isFinite(Number(metrics.project_std))) {
+    bits.push(
+      `En PERT el tiempo esperado de esa ruta es ${fmtNum(metrics.project_te)} y la desviación estándar es ${fmtNum(metrics.project_std)}.`
+    );
+  }
+  if (metrics.prob_meet_target != null && Number.isFinite(Number(metrics.prob_meet_target))) {
+    const pct = Number(metrics.prob_meet_target).toLocaleString("es-MX", {
+      style: "percent",
+      maximumFractionDigits: 1,
+    });
+    bits.push(`La probabilidad de terminar en el tiempo objetivo, o antes, es ${pct}.`);
+  }
+  if (metrics.duration_for_probability != null && Number.isFinite(Number(metrics.duration_for_probability))) {
+    bits.push(
+      `Para la probabilidad pedida haría falta una duración de ${fmtNum(metrics.duration_for_probability)}.`
+    );
+  }
+  if (metrics.crash_total_cost != null && Number.isFinite(Number(metrics.crash_total_cost))) {
+    bits.push(
+      `Acelerar cuesta ${fmtNum(metrics.crash_total_cost)} extra. El costo del proyecto queda en ${fmtNum(metrics.project_cost)}.`
+    );
+  }
+  if (result.warnings.some((warning) => /varias rutas críticas/i.test(warning))) {
+    bits.push("Hay más de una ruta crítica. Un retraso en cualquiera de ellas mueve la fecha de fin.");
+  }
+  if (!bits.length) {
+    bits.push("El cronograma muestra inicio y fin temprano, inicio y fin tardío, y la holgura de cada actividad.");
+  }
+  return bits.join(" ");
+}
+
 function explain(result: ModuleResult): string {
+  if (result.module === "pert_cpm") return explainPert(result);
   const s = result.status.toLowerCase();
   const z = result.solution.objective_value;
   const warnings = result.warnings || [];

@@ -1,6 +1,22 @@
 export type Cell = string | number | null;
 export type SheetMatrix = Cell[][];
 
+function pertNumber(v: Cell, label: string): number | null {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) throw new Error(`${label} no es un número válido. Escribe un valor como 4 o 1,5.`);
+    return v;
+  }
+  const t = String(v).trim();
+  if (!t) return null;
+  if (/invalid number|número no válido|numero no valido/i.test(t)) {
+    throw new Error(`${label} no es un número válido. Vuelve a escribirla, por ejemplo 4 o 1,5.`);
+  }
+  const n = Number(t.replace(/\s/g, "").replace(",", "."));
+  if (!Number.isFinite(n)) throw new Error(`${label} no es un número válido. Escribe un valor como 4 o 1,5.`);
+  return n;
+}
+
 function num(v: Cell, fallback = 0): number {
   if (v === null || v === "") return fallback;
   if (typeof v === "number") {
@@ -234,7 +250,7 @@ export function emptyPertSheet(): SheetMatrix {
       "Costo normal",
       "Costo crash",
     ],
-    ["A1", "", 0, "", "", "", "", "", ""],
+    ["A", "", "", "", "", "", "", "", ""],
   ];
 }
 
@@ -336,6 +352,7 @@ export type PertBody = {
     crash_cost?: number | null;
   }[];
   target_time?: number | null;
+  target_probability?: number | null;
   crash?: boolean;
   crash_target?: number | null;
 };
@@ -375,23 +392,17 @@ export function sheetToPert(matrix: SheetMatrix, mode: "cpm" | "pert" = "cpm"): 
         .split(/[,;\s]+/)
         .map((p) => p.trim())
         .filter(Boolean);
-      const durationRaw = str(r[2]);
-      const aRaw = str(r[3]);
-      const mRaw = str(r[4]);
-      const bRaw = str(r[5]);
-      const crashRaw = str(r[6]);
-      const nCostRaw = str(r[7]);
-      const cCostRaw = str(r[8]);
+      const id = str(r[0]);
       return {
-        id: str(r[0]),
+        id,
         predecessors: preds,
-        duration: durationRaw === "" ? null : num(r[2]),
-        a: aRaw === "" ? null : num(r[3]),
-        m: mRaw === "" ? null : num(r[4]),
-        b: bRaw === "" ? null : num(r[5]),
-        crash_time: crashRaw === "" ? null : num(r[6]),
-        normal_cost: nCostRaw === "" ? null : num(r[7]),
-        crash_cost: cCostRaw === "" ? null : num(r[8]),
+        duration: pertNumber(r[2], `La duración de «${id}»`),
+        a: pertNumber(r[3], `El optimista de «${id}»`),
+        m: pertNumber(r[4], `El más probable de «${id}»`),
+        b: pertNumber(r[5], `El pesimista de «${id}»`),
+        crash_time: pertNumber(r[6], `El tiempo crash de «${id}»`),
+        normal_cost: pertNumber(r[7], `El costo normal de «${id}»`),
+        crash_cost: pertNumber(r[8], `El costo crash de «${id}»`),
       };
     });
   return { mode, activities };

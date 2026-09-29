@@ -43,13 +43,34 @@ export type ModuleResult = {
   warnings: string[];
 };
 
+async function readError(res: Response): Promise<string> {
+  const text = await res.text();
+  try {
+    const data = JSON.parse(text) as { detail?: unknown };
+    if (typeof data.detail === "string" && data.detail.trim()) return data.detail;
+    if (Array.isArray(data.detail)) {
+      const parts = data.detail.map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) return String((item as { msg: unknown }).msg);
+        return "";
+      });
+      const joined = parts.filter(Boolean).join(" ");
+      if (joined) return joined;
+    }
+  } catch {
+    /* el cuerpo no es JSON */
+  }
+  const clean = text.trim();
+  return clean || `No se pudo completar la solicitud (${res.status}).`;
+}
+
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Error ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(await readError(res));
   return res.json();
 }
 
@@ -59,7 +80,7 @@ async function postBlob(path: string, body: unknown): Promise<Blob> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`Error ${res.status}: ${await res.text()}`);
+  if (!res.ok) throw new Error(await readError(res));
   return res.blob();
 }
 
