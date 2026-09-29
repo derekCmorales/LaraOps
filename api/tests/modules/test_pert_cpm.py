@@ -36,7 +36,7 @@ def test_pert_cycle_raises():
             Activity(id="B", predecessors=["A"], duration=1),
         ],
     )
-    with pytest.raises(PertCpmError, match="cycle"):
+    with pytest.raises(PertCpmError, match="ciclo"):
         solve(req)
 
 
@@ -59,6 +59,59 @@ def test_pert_crashing_reduces_duration():
     assert result.solution.metrics["project_duration"] <= 10.0 + 1e-6
     assert result.solution.metrics["crash_total_cost"] > 0
     assert result.iterations is not None and len(result.iterations) >= 1
+
+
+def test_pert_nan_duration():
+    req = PertCpmRequest(
+        mode="cpm",
+        activities=[Activity(id="A", predecessors=[], duration=float("nan"))],
+    )
+    with pytest.raises(PertCpmError, match="duración"):
+        solve(req)
+
+
+def test_pert_probability_single_activity():
+    req = PertCpmRequest(
+        mode="pert",
+        target_time=2,
+        activities=[Activity(id="A", predecessors=[], a=1, m=2, b=3)],
+    )
+    result = solve(req)
+    assert result.solution.metrics["project_te"] == pytest.approx(2)
+    assert result.solution.metrics["project_variance"] == pytest.approx(1 / 9)
+    assert result.solution.metrics["prob_meet_target"] == pytest.approx(0.5, abs=0.02)
+
+
+def test_pert_crash_does_not_overpay_parallel_uncrashable():
+    req = PertCpmRequest(
+        mode="cpm",
+        crash=True,
+        crash_target=5,
+        activities=[
+            Activity(id="A", predecessors=[], duration=10, crash_time=0, normal_cost=0, crash_cost=50),
+            Activity(id="B", predecessors=[], duration=8),
+        ],
+    )
+    result = solve(req)
+    assert result.status == SolveStatus.infeasible
+    assert result.solution.metrics["project_duration"] == pytest.approx(8)
+    assert result.solution.metrics["crash_total_cost"] == pytest.approx(10)
+
+
+def test_pert_crash_parallel_paths_together():
+    req = PertCpmRequest(
+        mode="cpm",
+        crash=True,
+        crash_target=8,
+        activities=[
+            Activity(id="A", predecessors=[], duration=10, crash_time=6, normal_cost=0, crash_cost=20),
+            Activity(id="B", predecessors=[], duration=10, crash_time=6, normal_cost=0, crash_cost=40),
+        ],
+    )
+    result = solve(req)
+    assert result.status == SolveStatus.ok
+    assert result.solution.metrics["project_duration"] == pytest.approx(8)
+    assert result.solution.metrics["crash_total_cost"] == pytest.approx(30)
 
 
 def test_pert_crash_infeasible_status():

@@ -28,6 +28,8 @@ type Props = {
   schemaSlug?: string;
   modelPreview?: string;
   sheetKind?: SheetEditorKind;
+  /** Reemplaza la hoja genérica cuando el módulo tiene su propio editor. */
+  editor?: ReactNode;
 };
 
 export default function ModuleWorkbench({
@@ -48,6 +50,7 @@ export default function ModuleWorkbench({
   schemaSlug,
   modelPreview,
   sheetKind = "generic",
+  editor,
 }: Props) {
   const [tab, setTab] = useState<"datos" | "resultados">("datos");
   const [result, setResult] = useState<ModuleResult | null>(null);
@@ -135,7 +138,9 @@ export default function ModuleWorkbench({
         >
           {blurb ? <p className="module-blurb">{blurb}</p> : null}
           {toolbar}
-          <SpreadsheetEditor matrix={matrix} onChange={onMatrixChange} height={sheetHeight} kind={sheetKind} />
+          {editor ?? (
+            <SpreadsheetEditor matrix={matrix} onChange={onMatrixChange} height={sheetHeight} kind={sheetKind} />
+          )}
           <JsonModelPanel buildBody={buildBody} onImportBody={onImportBody} result={result} schemaSlug={schemaSlug} />
           {modelPreview ? (
             <div className="model-preview">
