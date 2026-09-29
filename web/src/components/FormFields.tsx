@@ -31,6 +31,29 @@ type NumProps = {
   hint?: string;
 };
 
+/** Acepta punto o coma decimal y deja escribir el separador sin borrarlo. */
+export function parseDecimalDraft(raw: string): { value: number | null; partial: boolean; invalid: boolean } {
+  const t = raw.trim().replace(/\s/g, "");
+  if (t === "") return { value: null, partial: true, invalid: false };
+  if (!/^-?\d*([.,]\d*)?$/.test(t)) return { value: null, partial: false, invalid: true };
+  if (t === "-" || t === "." || t === "," || t === "-." || t === "-,") {
+    return { value: null, partial: true, invalid: false };
+  }
+  const norm = t.replace(",", ".");
+  if (norm.endsWith(".")) {
+    const n = Number(norm.slice(0, -1));
+    return { value: Number.isFinite(n) ? n : null, partial: true, invalid: false };
+  }
+  const n = Number(norm);
+  if (!Number.isFinite(n)) return { value: null, partial: false, invalid: true };
+  return { value: n, partial: false, invalid: false };
+}
+
+function formatDecimal(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return value.toLocaleString("es-MX", { useGrouping: false, maximumFractionDigits: 12 });
+}
+
 export function SmartNumberInput({
   value,
   onChange,
@@ -48,33 +71,34 @@ export function SmartNumberInput({
   min?: number;
   "aria-label"?: string;
 }) {
-  const [str, setStr] = useState(value.toString());
+  const [str, setStr] = useState(() => formatDecimal(value));
 
   useEffect(() => {
-    if ((str === "" || str === "-") && value === 0) return;
-    if (str.endsWith(".") && Number(str) === value) return;
-    if (Number(str) !== value) {
-      setStr(value.toString());
-    }
+    const parsed = parseDecimalDraft(str);
+    if (parsed.partial) return;
+    if (parsed.value === value) return;
+    setStr(formatDecimal(value));
   }, [value, str]);
 
   return (
     <input
       id={id}
-      className={className}
-      type="number"
+      className={["num-input", className].filter(Boolean).join(" ")}
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      spellCheck={false}
       step={step}
       min={min}
       value={str}
       onChange={(e) => {
         const val = e.target.value;
+        const parsed = parseDecimalDraft(val);
+        if (parsed.invalid) return;
+        if (min != null && parsed.value != null && parsed.value < min) return;
         setStr(val);
-        if (val === "" || val === "-") {
-          onChange(0);
-        } else {
-          const n = Number(val);
-          if (Number.isFinite(n)) onChange(n);
-        }
+        if (parsed.value == null) onChange(0);
+        else onChange(parsed.value);
       }}
       aria-label={ariaLabel}
     />
@@ -136,6 +160,15 @@ export function TextField({ label, value, onChange, hint, mono }: TextProps) {
   );
 }
 
+function parseNumberList(text: string): number[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => Number(s.replace(",", ".")))
+    .filter((n) => Number.isFinite(n));
+}
+
 export function NumberListField({
   label,
   value,
@@ -148,22 +181,34 @@ export function NumberListField({
   hint?: string;
 }) {
   const id = useId();
+  const [text, setText] = useState(value.join(", "));
+  const serialized = value.join("|");
+
+  useEffect(() => {
+    const parsed = parseNumberList(text);
+    if (parsed.join("|") !== serialized) setText(value.join(", "));
+  }, [serialized, text, value]);
+
   return (
-    <Field label={label} hint={hint ?? "Separa con comas o espacios"} htmlFor={id}>
+    <Field label={label} hint={hint ?? "Separa con comas o espacios. El decimal también puede ir con punto."} htmlFor={id}>
       <textarea
         id={id}
-        value={value.join(", ")}
+        value={text}
         onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
-          const parts = e.target.value
-            .split(/[\s,;]+/)
-            .map((s) => s.trim())
-            .filter(Boolean);
-          const nums = parts.map(Number).filter((n) => Number.isFinite(n));
-          onChange(nums);
+          const next = e.target.value;
+          setText(next);
+          onChange(parseNumberList(next));
         }}
       />
     </Field>
   );
+}
+
+function parseStringList(text: string): string[] {
+  return text
+    .split(/[,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export function StringListField({
@@ -178,20 +223,24 @@ export function StringListField({
   hint?: string;
 }) {
   const id = useId();
+  const [text, setText] = useState(value.join(", "));
+  const serialized = value.join("\u0000");
+
+  useEffect(() => {
+    if (parseStringList(text).join("\u0000") !== serialized) setText(value.join(", "));
+  }, [serialized, text, value]);
+
   return (
     <Field label={label} hint={hint ?? "Separa con comas"} htmlFor={id}>
       <input
         id={id}
         type="text"
-        value={value.join(", ")}
-        onChange={(e) =>
-          onChange(
-            e.target.value
-              .split(/[,;]+/)
-              .map((s) => s.trim())
-              .filter(Boolean)
-          )
-        }
+        value={text}
+        onChange={(e) => {
+          const next = e.target.value;
+          setText(next);
+          onChange(parseStringList(next));
+        }}
       />
     </Field>
   );

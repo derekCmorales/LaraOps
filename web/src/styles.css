@@ -1335,6 +1335,7 @@ textarea {
 }
 
 .field input[type="number"],
+.field input.num-input,
 .matrix-cell {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
@@ -1352,6 +1353,15 @@ textarea {
   margin: 0;
   font-size: var(--text-caption);
   color: var(--ink-400);
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  margin: 0 0 calc(var(--space) * 3);
+  color: var(--ink-900);
+  font-size: var(--text-body);
 }
 
 .matrix-editor {
@@ -1395,6 +1405,41 @@ textarea {
 .matrix-cell:focus {
   outline: 2px solid var(--ink-900);
   outline-offset: -2px;
+  background: var(--muted-fill);
+}
+
+.matrix-cell:disabled {
+  color: var(--ink-400);
+  background: var(--ink-100);
+  text-align: center;
+}
+
+.matrix-node {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--text-caption);
+  color: var(--ink-900);
+  padding: calc(var(--space) * 2);
+}
+
+.matrix-node:focus {
+  outline: 2px solid var(--ink-900);
+  outline-offset: -2px;
+  background: var(--paper-raised);
+}
+
+.matrix-gap {
+  background: var(--ink-100);
+  color: var(--ink-400);
+  text-align: center;
+  font-family: var(--font-data);
+}
+
+.matrix-supply {
   background: var(--muted-fill);
 }
 

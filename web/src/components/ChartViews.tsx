@@ -134,6 +134,22 @@ function isControlKind(graph: Graph): boolean {
   return names.includes("ucl") && names.includes("lcl");
 }
 
+function layoutCircle(
+  nodes: { id: string }[],
+  w: number,
+  h: number,
+): Map<string, { x: number; y: number }> {
+  const pos = new Map<string, { x: number; y: number }>();
+  const cx = w / 2;
+  const cy = h / 2;
+  const R = Math.min(w, h) * 0.36;
+  nodes.forEach((node, i) => {
+    const a = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+    pos.set(node.id, { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) });
+  });
+  return pos;
+}
+
 /* ——— Layout de red: capas topológicas o círculo ——— */
 function layoutNodes(
   nodes: { id: string }[],
@@ -415,7 +431,8 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
 
   const w = 640;
   const h = Math.max(300, 40 + nodes.length * 28);
-  const pos = layoutNodes(nodes, edges, w, h);
+  const undirected = (graph as { directed?: boolean }).directed === false;
+  const pos = undirected && nodes.length > 2 ? layoutCircle(nodes, w, h) : layoutNodes(nodes, edges, w, h);
   const title = chartTitle(graph, result.module);
   const subtitle =
     graph.subtitle ||
@@ -461,7 +478,7 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
           const hasFlowE = e.flow != null && e.flow > 0;
           const crit = e.critical || e.min_cut;
           const stroke = crit ? C.pivot : hasFlowE ? C.basic : C.grid;
-          const marker = crit ? "url(#arrow-crit)" : hasFlowE ? "url(#arrow-flow)" : "url(#arrow)";
+          const marker = undirected ? undefined : crit ? "url(#arrow-crit)" : hasFlowE ? "url(#arrow-flow)" : "url(#arrow)";
           const mx = (a.x + b.x) / 2;
           const my = (a.y + b.y) / 2;
           const cap = edgeCaption(e);

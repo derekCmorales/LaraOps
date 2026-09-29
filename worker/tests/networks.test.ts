@@ -39,6 +39,12 @@ describe("networks", () => {
     });
     expect(result.status).toBe("ok");
     assertClose(result.solution.metrics.path_length, 5);
+    expect(result.solution.variables).toEqual({});
+    expect(result.tables?.[0]?.rows).toEqual([
+      [0, "A"],
+      [1, "C"],
+      [2, "D"],
+    ]);
     expect(result.graph?.type).toBe("network");
   });
 
@@ -55,6 +61,78 @@ describe("networks", () => {
     });
     assertClose(result.solution.metrics.mst_weight, 3);
     expect(result.tables?.[0]?.columns).toEqual(["origen", "destino", "peso"]);
+    expect(result.iterations?.length).toBe(3);
+    expect(result.graph && "directed" in result.graph && result.graph.directed).toBe(false);
+  });
+
+  it("mst keeps the lighter undirected duplicate and accepts decimal weights", () => {
+    const result = solve({
+      problem: "mst",
+      nodes: ["A", "B", "C"],
+      edges: [
+        { source: "A", target: "B", weight: 4 },
+        { source: "B", target: "A", weight: 1.5 },
+        { source: "B", target: "C", weight: 2.5 },
+        { source: "A", target: "C", weight: 10 },
+      ],
+      directed: false,
+    });
+    assertClose(result.solution.metrics.mst_weight, 4);
+  });
+
+  it("mst rejects a disconnected graph", () => {
+    expect(() =>
+      solve({
+        problem: "mst",
+        nodes: ["A", "B", "C"],
+        edges: [{ source: "A", target: "B", weight: 1 }],
+        directed: false,
+      }),
+    ).toThrow(/no es conexo/);
+  });
+
+  it("shortest path with a negative edge uses Bellman-Ford", () => {
+    const result = solve({
+      problem: "shortest_path",
+      nodes: ["A", "B", "C"],
+      edges: [
+        { source: "A", target: "B", weight: 2 },
+        { source: "B", target: "C", weight: -5 },
+        { source: "A", target: "C", weight: 4 },
+      ],
+      source: "A",
+      sink: "C",
+      directed: true,
+    });
+    assertClose(result.solution.metrics.path_length, -3);
+  });
+
+  it("shortest path rejects a negative cycle that reaches the sink", () => {
+    expect(() =>
+      solve({
+        problem: "shortest_path",
+        nodes: ["A", "B"],
+        edges: [
+          { source: "A", target: "B", weight: 1 },
+          { source: "B", target: "A", weight: -2 },
+        ],
+        source: "A",
+        sink: "B",
+        directed: true,
+      }),
+    ).toThrow(/ciclo de peso negativo/);
+  });
+
+  it("max flow rejects the same source and sink", () => {
+    expect(() =>
+      solve({
+        problem: "max_flow",
+        nodes: ["S", "T"],
+        edges: [{ source: "S", target: "T", capacity: 3, weight: 3 }],
+        source: "S",
+        sink: "S",
+      }),
+    ).toThrow(/distintos/);
   });
 
   it("max flow = min cut", () => {
@@ -97,6 +175,10 @@ describe("networks", () => {
     const result = solve(data.request);
     expect(result.status).toBe("ok");
     assertClose(result.solution.metrics.tour_length, (data.expect as { tour_length: number }).tour_length);
+    expect(result.solution.variables).toEqual({});
+    const tour = result.tables?.[0]?.rows ?? [];
+    expect(tour[0]?.[1]).toBe(tour[tour.length - 1]?.[1]);
+    expect(tour.map((row) => row[1])).toEqual(expect.arrayContaining(["A", "B", "C", "D"]));
   });
 
   it("tsp heuristic matches small exact", () => {

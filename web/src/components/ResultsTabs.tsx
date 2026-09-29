@@ -216,6 +216,14 @@ function metricsCopyVariables(result: ModuleResult): boolean {
   return metricKeys.every((k) => vars[k] === metrics[k]);
 }
 
+const NETWORK_TABLES = new Set(["ruta", "aristas_mst", "flows", "min_cut", "recorrido"]);
+
+function nodeTextColumns(columns: string[]): number[] {
+  return columns
+    .map((column, index) => (/^(origen|destino|nodo)$/i.test(column) ? index : -1))
+    .filter((index) => index >= 0);
+}
+
 function GenericSolutionPane({ result }: Props) {
   const mirrored = metricsCopyVariables(result);
   const showVariables = Object.keys(result.solution.variables).length > 0 && !mirrored;
@@ -257,6 +265,18 @@ function GenericSolutionPane({ result }: Props) {
             textColumns={[0]}
           />
         )}
+      {result.module === "networks" &&
+        result.tables
+          ?.filter((t) => NETWORK_TABLES.has(t.name))
+          .map((t) => (
+            <SolutionTable
+              key={t.name}
+              caption={tableName(t.name)}
+              columns={labelColumns(t.columns)}
+              rows={labelTableRows(t.rows) as (string | number | boolean | null)[][]}
+              textColumns={nodeTextColumns(t.columns)}
+            />
+          ))}
       {result.tables
         ?.filter((t) => t.name === "vertices_feasible")
         .map((t) => (

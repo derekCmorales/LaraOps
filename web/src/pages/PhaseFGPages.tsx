@@ -61,7 +61,21 @@ import {
   StringListField,
   TextField,
 } from "../components/FormFields";
+import IntersectionMatrix from "../components/IntersectionMatrix";
 import RecordGrid from "../components/RecordGrid";
+import {
+  countLinks,
+  diagonalFor,
+  dropIndex,
+  edgesFromMatrix,
+  matrixFromEdges,
+  missingPairs,
+  nextNodeName,
+  resizeMatrix as resizeNullable,
+  symmetrize,
+  writeCell,
+  type Matrix,
+} from "../lib/networkSheet";
 import {
   AGG_EMPTY,
   AGG_EX,
@@ -622,43 +636,16 @@ export function GamePage() {
 
 /* ——— Redes ——— */
 
-type EdgeRow = { source: string; target: string; weight: number; capacity: number };
-
-function asEdgeRows(rows: { source: string; target: string; weight?: number; capacity?: number | null }[]): EdgeRow[] {
-  return rows.map((e) => ({
-    source: e.source,
-    target: e.target,
-    weight: e.weight ?? 0,
-    capacity: e.capacity ?? 0,
-  }));
-}
-
-function formatSupply(supply?: Record<string, number> | null): string {
-  if (!supply) return "";
-  return Object.entries(supply)
-    .map(([k, v]) => `${k},${v}`)
-    .join("\n");
-}
-
-function parseSupply(text: string): Record<string, number> | undefined {
-  const node_supply: Record<string, number> = {};
-  text.split("\n").forEach((line) => {
-    const parts = line.trim().split(/[,;\s]+/);
-    const n = parts[0];
-    const v = parts[1];
-    if (n && v != null && v !== "") node_supply[n.trim()] = Number(v) || 0;
-  });
-  return Object.keys(node_supply).length ? node_supply : undefined;
-}
-
 type NetworkExample = {
   problem: string;
   nodes: string[];
-  edges: { source: string; target: string; weight: number; capacity: number }[];
+  edges: { source: string; target: string; weight?: number | null; capacity?: number | null }[];
   source: string;
   sink: string;
   node_supply?: Record<string, number>;
   distance_matrix?: number[][];
+  directed?: boolean;
+  tsp_method?: string | null;
 };
 
 function exampleForProblem(problem: string): NetworkExample {
@@ -669,96 +656,230 @@ function exampleForProblem(problem: string): NetworkExample {
   return NET_EX;
 }
 
-export function NetworksPage() {
-  const [problem, setProblem] = useState(NET_EMPTY.problem);
-  const [nodes, setNodes] = useState(NET_EMPTY.nodes);
-  const [edges, setEdges] = useState<EdgeRow[]>(asEdgeRows(NET_EMPTY.edges));
-  const [source, setSource] = useState(NET_EMPTY.source);
-  const [sink, setSink] = useState(NET_EMPTY.sink);
-  const [directed, setDirected] = useState(true);
-  const [nodeSupplyText, setNodeSupplyText] = useState("");
-  const [distance, setDistance] = useState<number[][]>(() =>
-    resizeMatrix([], NET_EMPTY.nodes.length, NET_EMPTY.nodes.length)
-  );
+function matrixHint(problem: string): string {
+  if (problem === "mst") {
+    return "Peso de la arista entre la fila y la columna. Vacío = sin conexión. Al ser no dirigido, el otro lado se copia solo.";
+  }
+  if (problem === "max_flow") {
+    return "Capacidad del arco fila → columna. Vacío = ese arco no existe.";
+  }
+  if (problem === "transshipment") {
+    return "Costo unitario del arco fila → columna. En Oferta: positivo es oferta, negativo es demanda y 0 es transbordo.";
+  }
+  if (problem === "tsp") {
+    return "Distancia entre ciudades. La diagonal es 0. El resto de las casillas es obligatorio.";
+  }
+  return "Costo del arco fila → columna. Vacío = no hay arco. La coma es decimal: 1,5.";
+}
 
-  const needsTerminals = problem === "shortest_path" || problem === "max_flow";
+function applyNetworkExample(ex: NetworkExample) {
+  const nodes = [...ex.nodes];
+  const diagonal = diagonalFor(ex.problem);
+  const weights =
+    ex.problem === "tsp" && ex.distance_matrix
+      ? ex.distance_matrix.map((row) => row.map((n) => n))
+      : matrixFromEdges(
+          nodes,
+          ex.edges,
+          ex.problem === "max_flow" ? "capacity" : "weight",
+          ex.problem === "mst",
+          diagonal,
+        );
+  const hasCap = ex.problem === "transshipment" && ex.edges.some((e) => e.capacity != null && e.capacity > 0);
+  return {
+    nodes,
+    weights,
+    capacities: hasCap ? matrixFromEdges(nodes, ex.edges, "capacity", false, null) : resizeNullable([], nodes.length, null),
+    useCapacity: hasCap,
+    supply: nodes.map((n) => ex.node_supply?.[n] ?? 0),
+    source: nodes.includes(ex.source) ? ex.source : nodes[0] ?? "",
+    sink: nodes.includes(ex.sink) ? ex.sink : nodes[nodes.length - 1] ?? "",
+    directed: ex.problem === "shortest_path" ? ex.directed !== false : ex.problem !== "mst" && ex.problem !== "tsp",
+    symmetricCosts: false,
+    symmetricTsp: false,
+    tspMethod: ex.tsp_method === "heuristic" || ex.tsp_method === "exact" ? ex.tsp_method : "auto",
+  };
+}
+
+export function NetworksPage() {
+  const empty = applyNetworkExample(NET_EMPTY);
+  const [problem, setProblem] = useState(NET_EMPTY.problem);
+  const [nodes, setNodes] = useState(empty.nodes);
+  const [weights, setWeights] = useState<Matrix>(empty.weights);
+  const [capacities, setCapacities] = useState<Matrix>(empty.capacities);
+  const [useCapacity, setUseCapacity] = useState(empty.useCapacity);
+  const [supply, setSupply] = useState(empty.supply);
+  const [source, setSource] = useState(empty.source);
+  const [sink, setSink] = useState(empty.sink);
+  const [directed, setDirected] = useState(empty.directed);
+  const [symmetricCosts, setSymmetricCosts] = useState(false);
+  const [symmetricTsp, setSymmetricTsp] = useState(false);
+  const [tspMethod, setTspMethod] = useState("auto");
+
   const isTsp = problem === "tsp";
   const isTrans = problem === "transshipment";
+  const isMst = problem === "mst";
+  const needsTerminals = problem === "shortest_path" || problem === "max_flow";
+  const symmetric =
+    isMst ||
+    (problem === "shortest_path" && !directed) ||
+    (isTrans && symmetricCosts) ||
+    (isTsp && symmetricTsp);
+  const upperOnly = isMst || (problem === "shortest_path" && !directed);
+  const supplySum = supply.reduce((acc, n) => acc + (Number.isFinite(n) ? n : 0), 0);
 
-  function setNodesKeepingMatrix(next: string[]) {
+  function changeProblem(next: string) {
+    setProblem(next);
+    const diagonal = diagonalFor(next);
+    setWeights((prev) => {
+      const sized = resizeNullable(prev, nodes.length, diagonal);
+      return next === "mst" ? symmetrize(sized, null) : sized;
+    });
+    setCapacities((prev) => resizeNullable(prev, nodes.length, null));
+    if (next === "mst" || next === "tsp") setDirected(false);
+    if (next === "max_flow" || next === "transshipment" || next === "shortest_path") setDirected(true);
+  }
+
+  function addNode() {
+    const name = nextNodeName(nodes);
+    const diagonal = diagonalFor(problem);
+    setNodes((prev) => [...prev, name]);
+    setWeights((prev) => resizeNullable(prev, prev.length + 1, diagonal));
+    setCapacities((prev) => resizeNullable(prev, prev.length + 1, null));
+    setSupply((prev) => [...prev, 0]);
+  }
+
+  function removeNode(index: number) {
+    if (nodes.length <= 2) return;
+    const removed = nodes[index];
+    const nextNodes = nodes.filter((_, i) => i !== index);
+    setNodes(nextNodes);
+    setWeights((prev) => dropIndex(prev, index, diagonalFor(problem)));
+    setCapacities((prev) => dropIndex(prev, index, null));
+    setSupply((prev) => prev.filter((_, i) => i !== index));
+    if (source === removed) setSource(nextNodes[0] ?? "");
+    if (sink === removed) setSink(nextNodes[nextNodes.length - 1] ?? "");
+  }
+
+  function renameNode(index: number, name: string) {
+    if (nodes.some((node, i) => i !== index && node === name)) return false;
+    const previous = nodes[index];
+    const next = nodes.slice();
+    next[index] = name;
     setNodes(next);
-    setDistance((prev) => resizeMatrix(prev, next.length, next.length));
+    if (source === previous) setSource(name);
+    if (sink === previous) setSink(name);
+    return true;
+  }
+
+  function load(ex: NetworkExample) {
+    const snap = applyNetworkExample(ex);
+    setProblem(ex.problem);
+    setNodes(snap.nodes);
+    setWeights(snap.weights);
+    setCapacities(snap.capacities);
+    setUseCapacity(snap.useCapacity);
+    setSupply(snap.supply);
+    setSource(snap.source);
+    setSink(snap.sink);
+    setDirected(snap.directed);
+    setSymmetricCosts(snap.symmetricCosts);
+    setSymmetricTsp(snap.symmetricTsp);
+    setTspMethod(snap.tspMethod);
   }
 
   return (
     <FormModulePage
       group="Redes y flujo"
       title="Redes"
-      blurb="Define nodos y aristas. Ruta corta y flujo máximo usan origen y destino. Transbordo pide oferta/demanda por nodo. TSP usa la matriz de distancias."
+      blurb="Cada tipo usa una tabla de intersecciones: la fila es el origen y la columna el destino. Una casilla vacía es un arco que no existe. Los decimales aceptan coma o punto."
       filenameBase="networks"
       schemaSlug="networks"
       buildBody={() => {
+        if (nodes.length < 2) throw new Error("hacen falta al menos dos nodos");
+        if (isTsp) {
+          const missing = missingPairs(nodes, weights);
+          if (missing.length) {
+            const [a, b] = missing[0];
+            throw new Error(`falta la distancia entre ${a} y ${b}`);
+          }
+          const body: Record<string, unknown> = {
+            problem,
+            nodes,
+            directed: false,
+            distance_matrix: weights.map((row) => row.map((cell) => cell ?? 0)),
+          };
+          if (tspMethod === "exact" || tspMethod === "heuristic") body.tsp_method = tspMethod;
+          return body;
+        }
+        const edges = edgesFromMatrix(nodes, weights, {
+          upperOnly,
+          asCapacity: problem === "max_flow",
+          capacities: isTrans && useCapacity ? capacities : null,
+        });
+        if (!edges.length) throw new Error("indica al menos una conexión en la tabla");
         const body: Record<string, unknown> = {
           problem,
           nodes,
-          directed: isTsp || problem === "mst" ? false : directed,
+          edges,
+          directed: isMst ? false : directed,
         };
-        if (!isTsp) {
-          body.edges = edges.map((e) => {
-            const row: Record<string, unknown> = { source: e.source, target: e.target, weight: e.weight };
-            if (e.capacity > 0) row.capacity = e.capacity;
-            return row;
-          });
-        }
         if (needsTerminals) {
+          if (!nodes.includes(source) || !nodes.includes(sink)) {
+            throw new Error("elige origen y destino entre los nodos");
+          }
           body.source = source;
           body.sink = sink;
         }
         if (isTrans) {
-          const node_supply = parseSupply(nodeSupplyText);
-          if (node_supply) body.node_supply = node_supply;
+          body.node_supply = Object.fromEntries(nodes.map((node, i) => [node, supply[i] ?? 0]));
+          body.directed = true;
         }
-        if (isTsp) body.distance_matrix = distance;
         return body;
       }}
       solve={solveNetworks}
       exportXlsx={exportNetworksXlsx}
       exportPdf={exportNetworksPdf}
-      onLoadExample={() => {
-        const ex = exampleForProblem(problem);
-        setProblem(ex.problem);
-        setNodes([...ex.nodes]);
-        setEdges(asEdgeRows(ex.edges.length ? ex.edges : [{ source: ex.nodes[0] ?? "", target: ex.nodes[1] ?? "", weight: 0, capacity: 0 }]));
-        setSource(ex.source);
-        setSink(ex.sink);
-        setDirected(ex.problem !== "mst" && ex.problem !== "tsp");
-        setNodeSupplyText(formatSupply(ex.node_supply));
-        setDistance(
-          ex.distance_matrix
-            ? ex.distance_matrix.map((row) => [...row])
-            : resizeMatrix([], ex.nodes.length, ex.nodes.length)
-        );
-      }}
+      onLoadExample={() => load(exampleForProblem(problem))}
       onImportBody={(body) => {
-        const b = body as {
-          problem?: string;
-          nodes?: string[];
-          edges?: { source: string; target: string; weight?: number; capacity?: number | null }[];
-          source?: string;
-          sink?: string;
-          directed?: boolean;
-          node_supply?: Record<string, number>;
-          distance_matrix?: number[][];
-        };
-        if (b.problem) setProblem(b.problem);
-        if (b.nodes) setNodes([...b.nodes]);
-        if (b.edges) setEdges(asEdgeRows(b.edges));
-        if (b.source) setSource(b.source);
-        if (b.sink) setSink(b.sink);
-        if (b.directed != null) setDirected(b.directed);
-        if (b.node_supply) setNodeSupplyText(formatSupply(b.node_supply));
-        if (b.distance_matrix) setDistance(b.distance_matrix.map((row) => [...row]));
-        else if (b.nodes) setDistance((prev) => resizeMatrix(prev, b.nodes!.length, b.nodes!.length));
+        const b = body as NetworkExample;
+        const problemNext = b.problem || problem;
+        const nodesNext = b.nodes?.length ? [...b.nodes] : [...nodes];
+        const diagonal = diagonalFor(problemNext);
+        let weightsNext: Matrix;
+        if (b.distance_matrix && (problemNext === "tsp" || !b.edges?.length)) {
+          weightsNext = resizeNullable(
+            b.distance_matrix.map((row) => row.map((n) => (n == null ? null : Number(n)))),
+            nodesNext.length,
+            diagonal,
+          );
+        } else if (b.edges) {
+          weightsNext = matrixFromEdges(
+            nodesNext,
+            b.edges,
+            problemNext === "max_flow" ? "capacity" : "weight",
+            problemNext === "mst" || b.directed === false,
+            diagonal,
+          );
+        } else {
+          weightsNext = resizeNullable(weights, nodesNext.length, diagonal);
+        }
+        const hasCap =
+          problemNext === "transshipment" && !!b.edges?.some((e) => e.capacity != null && Number(e.capacity) > 0);
+        setProblem(problemNext);
+        setNodes(nodesNext);
+        setWeights(weightsNext);
+        setCapacities(
+          hasCap && b.edges ? matrixFromEdges(nodesNext, b.edges, "capacity", false, null) : resizeNullable([], nodesNext.length, null),
+        );
+        setUseCapacity(hasCap);
+        setSupply(nodesNext.map((n) => b.node_supply?.[n] ?? 0));
+        setSource(b.source && nodesNext.includes(b.source) ? b.source : nodesNext[0] ?? "");
+        setSink(b.sink && nodesNext.includes(b.sink) ? b.sink : nodesNext[nodesNext.length - 1] ?? "");
+        setDirected(problemNext === "shortest_path" ? b.directed !== false : problemNext !== "mst" && problemNext !== "tsp");
+        setSymmetricCosts(problemNext === "transshipment" && b.directed === false);
+        setSymmetricTsp(false);
+        setTspMethod(b.tsp_method === "heuristic" || b.tsp_method === "exact" ? b.tsp_method : "auto");
       }}
     >
       <Section title="Problema">
@@ -766,64 +887,148 @@ export function NetworksPage() {
           <SelectField
             label="Tipo"
             value={problem}
-            onChange={setProblem}
+            onChange={changeProblem}
             options={[
               { value: "shortest_path", label: "Ruta más corta" },
               { value: "mst", label: "Árbol de expansión mínima" },
               { value: "max_flow", label: "Flujo máximo" },
               { value: "transshipment", label: "Transbordo" },
-              { value: "tsp", label: "TSP" },
+              { value: "tsp", label: "Agente viajante (TSP)" },
             ]}
           />
           {needsTerminals && (
             <>
-              <TextField label="Origen" value={source} onChange={setSource} mono />
-              <TextField label="Destino (sumidero)" value={sink} onChange={setSink} mono />
+              <SelectField
+                label="Origen"
+                value={source}
+                onChange={setSource}
+                options={nodes.map((node) => ({ value: node, label: node }))}
+              />
+              <SelectField
+                label="Destino"
+                value={sink}
+                onChange={setSink}
+                options={nodes.map((node) => ({ value: node, label: node }))}
+              />
             </>
           )}
+          {isTsp && (
+            <SelectField
+              label="Método"
+              value={tspMethod}
+              onChange={setTspMethod}
+              options={[
+                { value: "auto", label: "Automático" },
+                { value: "exact", label: "Exacto (hasta 10 nodos)" },
+                { value: "heuristic", label: "Heurística" },
+              ]}
+            />
+          )}
         </FieldGrid>
-        {needsTerminals && (
+        {problem === "shortest_path" && (
           <label className="field-checkbox">
-            <input type="checkbox" checked={directed} onChange={(e) => setDirected(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={directed}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setDirected(next);
+                if (!next) setWeights((prev) => symmetrize(prev, null));
+              }}
+            />
             Grafo dirigido
           </label>
         )}
-        <StringListField label="Nodos" value={nodes} onChange={setNodesKeepingMatrix} />
-        {!isTsp && (
-          <RecordGrid<EdgeRow>
-            label="Aristas"
-            columns={[
-              { key: "source", label: "Origen", type: "text" },
-              { key: "target", label: "Destino", type: "text" },
-              { key: "weight", label: "Peso / costo", type: "number" },
-              { key: "capacity", label: "Capacidad", type: "number" },
-            ]}
-            rows={edges}
-            onChange={setEdges}
-            emptyRow={() => ({ source: "", target: "", weight: 0, capacity: 0 })}
-          />
-        )}
-        {isTsp && (
-          <MatrixEditor
-            label="Matriz de distancias"
-            values={distance}
-            rowLabels={nodes}
-            colLabels={nodes}
-            onChange={setDistance}
-          />
+        {isTrans && (
+          <label className="field-checkbox">
+            <input
+              type="checkbox"
+              checked={symmetricCosts}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setSymmetricCosts(next);
+                if (next) setWeights((prev) => symmetrize(prev, null));
+              }}
+            />
+            Costos simétricos
+          </label>
         )}
         {isTrans && (
-          <div className="field">
-            <label>Oferta/demanda por nodo</label>
-            <textarea
-              value={nodeSupplyText}
-              onChange={(e) => setNodeSupplyText(e.target.value)}
-              rows={4}
-              placeholder="S1,50&#10;D1,-30"
-              style={{ fontFamily: "var(--font-data)" }}
+          <label className="field-checkbox">
+            <input
+              type="checkbox"
+              checked={useCapacity}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setUseCapacity(next);
+                if (next) setCapacities((prev) => resizeNullable(prev, nodes.length, null));
+              }}
             />
-            <p className="field-hint">Una línea por nodo: nombre, cantidad (+ oferta, − demanda). Debe sumar 0.</p>
-          </div>
+            Limitar capacidad de los arcos
+          </label>
+        )}
+        {isTsp && (
+          <label className="field-checkbox">
+            <input
+              type="checkbox"
+              checked={symmetricTsp}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setSymmetricTsp(next);
+                if (next) setWeights((prev) => symmetrize(prev, 0));
+              }}
+            />
+            Distancias simétricas
+          </label>
+        )}
+        <IntersectionMatrix
+          label={
+            isMst
+              ? "Pesos"
+              : problem === "max_flow"
+                ? "Capacidades"
+                : isTsp
+                  ? "Distancias"
+                  : isTrans
+                    ? "Costos y oferta"
+                    : "Costos"
+          }
+          hint={matrixHint(problem)}
+          nodes={nodes}
+          values={weights}
+          diagonal={isTsp ? "zero" : "blank"}
+          onRename={renameNode}
+          onAddNode={addNode}
+          onRemoveNode={removeNode}
+          onChange={(row, col, value) => setWeights((prev) => writeCell(prev, row, col, value, symmetric))}
+          supply={isTrans ? supply : undefined}
+          onSupplyChange={
+            isTrans
+              ? (index, value) => setSupply((prev) => prev.map((n, i) => (i === index ? value : n)))
+              : undefined
+          }
+          linkCount={countLinks(weights, upperOnly)}
+        />
+        {isTrans && (
+          <p className={Math.abs(supplySum) < 1e-6 ? "field-hint" : "error-inline"}>
+            Suma de oferta y demanda: {supplySum.toLocaleString("es-MX", { maximumFractionDigits: 4 })}
+            {Math.abs(supplySum) < 1e-6 ? " · balanceada" : " · debe sumar 0"}
+          </p>
+        )}
+        {isTrans && useCapacity && (
+          <IntersectionMatrix
+            label="Capacidades"
+            hint="Vacío = sin límite. Un número es lo máximo que puede circular por ese arco."
+            nodes={nodes}
+            values={capacities}
+            diagonal="blank"
+            lockStructure
+            onRename={() => false}
+            onAddNode={() => undefined}
+            onRemoveNode={() => undefined}
+            onChange={(row, col, value) => setCapacities((prev) => writeCell(prev, row, col, value, symmetricCosts))}
+            linkCount={countLinks(capacities, false)}
+          />
         )}
       </Section>
     </FormModulePage>
