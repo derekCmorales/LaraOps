@@ -38,6 +38,7 @@ export type GraphNetwork = {
   edges: Record<string, unknown>[];
   title?: string;
   subtitle?: string;
+  directed?: boolean;
 };
 
 export type GraphGantt = {
