@@ -5,6 +5,7 @@ type Props = {
   objectiveValue?: number | null;
   objectiveSense?: string | null;
   warnings?: string[];
+  valueLabel?: string;
 };
 
 function toneFor(status: string, warnings: string[]): "ok" | "warn" | "error" {
@@ -28,6 +29,7 @@ export default function StatusBand({
   objectiveValue,
   objectiveSense,
   warnings = [],
+  valueLabel = "Z",
 }: Props) {
   const tone = toneFor(status, warnings);
   const sense = senseLabel(objectiveSense);
@@ -45,7 +47,7 @@ export default function StatusBand({
       </div>
       {objectiveValue != null && Number.isFinite(objectiveValue) && (
         <div className="status-band-z">
-          Z = {formatZ(objectiveValue)}
+          {valueLabel} = {formatZ(objectiveValue)}
           {sense ? <span>({sense})</span> : null}
         </div>
       )}
