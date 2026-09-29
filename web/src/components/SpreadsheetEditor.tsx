@@ -78,6 +78,7 @@ function matrixToRows(
             : colLabel(i),
       editable: true,
       resizable: true,
+      cellDataType: kind === "lp" ? undefined : false,
       minWidth: 96,
       flex: 1,
     };
