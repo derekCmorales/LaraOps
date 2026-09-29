@@ -9,6 +9,7 @@ import {
   translateWarning,
 } from "../lib/resultLabels";
 import ChartViews from "./ChartViews";
+import PertResults from "./PertResults";
 import Explainer from "./Explainer";
 import IterationsViewer, { type IterationStepView } from "./IterationsViewer";
 import SolutionTable from "./SolutionTable";
@@ -300,7 +301,14 @@ export default function ResultsTabs({ result }: Props) {
       {
         id: "solution",
         label: "Solución",
-        content: isLp ? <LpSolutionPane result={result} /> : <GenericSolutionPane result={result} />,
+        content:
+          result.module === "pert_cpm" ? (
+            <PertResults result={result} />
+          ) : isLp ? (
+            <LpSolutionPane result={result} />
+          ) : (
+            <GenericSolutionPane result={result} />
+          ),
       },
     ];
     if (result.iterations?.length) {
@@ -352,6 +360,7 @@ export default function ResultsTabs({ result }: Props) {
         objectiveValue={result.solution.objective_value}
         objectiveSense={result.solution.objective_sense}
         warnings={result.warnings}
+        valueLabel={result.module === "pert_cpm" ? "Duración" : "Z"}
       />
       <div className="result-tabs" role="tablist" aria-label="Vistas del resultado">
         {panes.map((p) => (
