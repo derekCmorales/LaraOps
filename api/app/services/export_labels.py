@@ -160,6 +160,18 @@ LABELS: dict[str, str] = {
     "feasible": "factible",
     "min": "minimización",
     "max": "maximización",
+    "assignment": "asignación",
+    "sin_asignar": "sin asignar",
+    "asignacion_alternativa": "asignación alternativa",
+    "matriz_original": "matriz original (M = prohibida)",
+    "agente": "agente",
+    "tarea": "tarea",
+    "ganancia": "ganancia",
+    "costo": "costo",
+    "nombre": "nombre",
+    "total": "total",
+    "n_assignments": "parejas asignadas",
+    "n_adjustments": "ajustes de la matriz",
 }
 
 

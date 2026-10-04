@@ -1,10 +1,10 @@
 import { SolverError } from "../../errors";
 import { LIMITS, assertLimit } from "../../limits";
-import type { GraphMatrix, IterationStep, ModuleResult } from "../../schema";
+import type { GraphMatrix, IterationStep, ModuleResult, NamedTable } from "../../schema";
 import { okResult } from "../../schema";
 
+/** Costo de una celda prohibida. Se muestra como "M" en las tablas. */
 const BIG_M = 1e9;
-const ZERO = 1e-12;
 
 export type AssignmentRequest = {
   agents: string[];
@@ -14,35 +14,48 @@ export type AssignmentRequest = {
   forbidden_assignments: [string, string][];
 };
 
+type Pair = [number, number];
+
 function asRecord(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new SolverError("payload debe ser un objeto JSON");
+    throw new SolverError("Los datos deben ser un objeto JSON.");
   }
   return body as Record<string, unknown>;
 }
 
-function stringList(v: unknown, name: string): string[] {
-  if (!Array.isArray(v) || v.length === 0) {
-    throw new SolverError(`${name} debe ser una lista no vacía`);
-  }
+function nameList(v: unknown, kind: "agent" | "task"): string[] {
+  const one = kind === "agent" ? "un agente" : "una tarea";
+  const of = kind === "agent" ? "del agente" : "de la tarea";
+  const group = kind === "agent" ? "los agentes" : "las tareas";
+  if (!Array.isArray(v) || v.length === 0) throw new SolverError(`Agrega al menos ${one}.`);
+  const seen = new Set<string>();
   return v.map((item, i) => {
     const s = String(item ?? "").trim();
-    if (!s) throw new SolverError(`${name}[${i}] no puede estar vacío`);
+    if (!s) throw new SolverError(`Falta el nombre ${of} ${i + 1}.`);
+    if (seen.has(s)) throw new SolverError(`«${s}» está repetido en ${group}. Usa nombres distintos.`);
+    seen.add(s);
     return s;
   });
 }
 
-function numMatrix(v: unknown, rows: number, cols: number): number[][] {
+function numMatrix(v: unknown, agents: string[], tasks: string[]): number[][] {
+  const rows = agents.length;
+  const cols = tasks.length;
   if (!Array.isArray(v) || v.length !== rows) {
-    throw new SolverError("costs matrix dimensions must match agents x tasks");
+    throw new SolverError(`La matriz de costos debe tener ${rows} filas (una por agente) y ${cols} columnas (una por tarea).`);
   }
   return v.map((row, i) => {
     if (!Array.isArray(row) || row.length !== cols) {
-      throw new SolverError("costs matrix dimensions must match agents x tasks");
+      throw new SolverError(`La fila de «${agents[i]}» debe tener ${cols} valores, uno por tarea.`);
     }
     return row.map((cell, j) => {
-      const n = Number(cell);
-      if (!Number.isFinite(n)) throw new SolverError(`costo inválido en [${i}][${j}]`);
+      const n = cell === null || cell === "" ? NaN : Number(cell);
+      if (!Number.isFinite(n)) {
+        throw new SolverError(`El valor de «${agents[i]}» en «${tasks[j]}» no es un número.`);
+      }
+      if (Math.abs(n) >= BIG_M / 1000) {
+        throw new SolverError(`El valor de «${agents[i]}» en «${tasks[j]}» es demasiado grande. Usa una celda prohibida en lugar de un costo enorme.`);
+      }
       return n;
     });
   });
@@ -50,23 +63,40 @@ function numMatrix(v: unknown, rows: number, cols: number): number[][] {
 
 export function parseAssignmentRequest(body: unknown): AssignmentRequest {
   const o = asRecord(body);
-  const agents = stringList(o.agents, "agents");
-  const tasks = stringList(o.tasks, "tasks");
+  const agents = nameList(o.agents, "agent");
+  const tasks = nameList(o.tasks, "task");
   assertLimit(
     agents.length <= LIMITS.assignmentDim && tasks.length <= LIMITS.assignmentDim,
     `Asignación limitada a ${LIMITS.assignmentDim}×${LIMITS.assignmentDim} en el plan Free`,
   );
+  const agentSet = new Set(agents);
+  const taskSet = new Set(tasks);
   const forbidden: [string, string][] = [];
-  if (Array.isArray(o.forbidden_assignments)) {
+  const seen = new Set<string>();
+  if (o.forbidden_assignments != null) {
+    if (!Array.isArray(o.forbidden_assignments)) {
+      throw new SolverError("forbidden_assignments debe ser una lista de pares [agente, tarea].");
+    }
     for (const pair of o.forbidden_assignments) {
-      if (Array.isArray(pair) && pair.length >= 2) forbidden.push([String(pair[0]), String(pair[1])]);
+      if (!Array.isArray(pair) || pair.length !== 2) {
+        throw new SolverError("Cada asignación prohibida debe ser un par [agente, tarea].");
+      }
+      const a = String(pair[0] ?? "").trim();
+      const t = String(pair[1] ?? "").trim();
+      if (!agentSet.has(a) || !taskSet.has(t)) {
+        throw new SolverError(`La asignación prohibida ${a}->${t} no corresponde a un agente y una tarea de la matriz.`);
+      }
+      const key = `${a}\u0000${t}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      forbidden.push([a, t]);
     }
   }
-  const sense = o.sense === "max" ? "max" : "min";
+  const sense = typeof o.sense === "string" && o.sense.trim().toLowerCase().startsWith("max") ? "max" : "min";
   return {
     agents,
     tasks,
-    costs: numMatrix(o.costs, agents.length, tasks.length),
+    costs: numMatrix(o.costs, agents, tasks),
     sense,
     forbidden_assignments: forbidden,
   };
@@ -130,155 +160,293 @@ export function linearSumAssignment(cost: number[][]): { rows: number[]; cols: n
   return { rows: pairs.map((p0) => p0[0]), cols: pairs.map((p0) => p0[1]) };
 }
 
-/** Greedy line cover of zeros — didactic, matches the Python solver. */
-function minLineCover(zeros: boolean[][]): { coverRows: number[]; coverCols: number[] } {
-  const n = zeros.length;
-  const uncovered = zeros.map((row) => row.slice());
-  const coverRows: number[] = [];
-  const coverCols: number[] = [];
-  const hasUncovered = () => uncovered.some((row) => row.some(Boolean));
-  while (hasUncovered()) {
-    const rowCounts = uncovered.map((row) => row.reduce((a, z) => a + (z ? 1 : 0), 0));
-    const colCounts = Array.from({ length: n }, (_, j) => uncovered.reduce((a, row) => a + (row[j] ? 1 : 0), 0));
-    const rowMax = Math.max(...rowCounts);
-    const colMax = Math.max(...colCounts);
-    if (rowMax >= colMax) {
-      const i = rowCounts.indexOf(rowMax);
-      coverRows.push(i);
-      for (let j = 0; j < n; j++) uncovered[i][j] = false;
-    } else {
-      const j = colCounts.indexOf(colMax);
-      coverCols.push(j);
-      for (let i = 0; i < n; i++) uncovered[i][j] = false;
+/**
+ * Máximo emparejamiento bipartito (Kuhn) sobre las celdas permitidas.
+ * Las filas con menos opciones se atienden primero, como se hace a mano.
+ */
+export function maxMatching(allowed: boolean[][]): { rowMatch: number[]; colMatch: number[]; size: number } {
+  const n = allowed.length;
+  const m = n ? allowed[0].length : 0;
+  const rowMatch = new Array<number>(n).fill(-1);
+  const colMatch = new Array<number>(m).fill(-1);
+  const order = Array.from({ length: n }, (_, i) => i).sort(
+    (a, b) => allowed[a].filter(Boolean).length - allowed[b].filter(Boolean).length || a - b,
+  );
+  function augment(i: number, seen: boolean[]): boolean {
+    for (let j = 0; j < m; j++) {
+      if (!allowed[i][j] || seen[j]) continue;
+      seen[j] = true;
+      if (colMatch[j] < 0 || augment(colMatch[j], seen)) {
+        rowMatch[i] = j;
+        colMatch[j] = i;
+        return true;
+      }
     }
-    if (coverRows.length + coverCols.length >= n) break;
+    return false;
   }
-  return { coverRows, coverCols };
+  let size = 0;
+  for (const i of order) {
+    if (augment(i, new Array<boolean>(m).fill(false))) size += 1;
+  }
+  return { rowMatch, colMatch, size };
 }
 
-function zerosOf(mat: number[][]): boolean[][] {
-  return mat.map((row) => row.map((v) => v < ZERO));
+/** Filas y columnas alcanzables por caminos alternantes desde las filas libres (teorema de König). */
+function alternatingReach(allowed: boolean[][], rowMatch: number[], colMatch: number[], from: number[]) {
+  const n = allowed.length;
+  const rowSeen = new Array<boolean>(n).fill(false);
+  const colSeen = new Array<boolean>(n).fill(false);
+  const queue = [...from];
+  for (const r of from) rowSeen[r] = true;
+  while (queue.length) {
+    const i = queue.shift()!;
+    for (let j = 0; j < n; j++) {
+      if (!allowed[i][j] || colSeen[j] || rowMatch[i] === j) continue;
+      colSeen[j] = true;
+      const next = colMatch[j];
+      if (next >= 0 && !rowSeen[next]) {
+        rowSeen[next] = true;
+        queue.push(next);
+      }
+    }
+  }
+  return { rowSeen, colSeen };
+}
+
+/**
+ * Cobertura mínima de ceros. Por König, el número mínimo de líneas es igual al
+ * máximo de ceros independientes, así que el método se detiene justo cuando hay
+ * asignación completa.
+ */
+export function minLineCover(zeros: boolean[][]): { coverRows: number[]; coverCols: number[]; rowMatch: number[] } {
+  const n = zeros.length;
+  const { rowMatch, colMatch } = maxMatching(zeros);
+  const free = rowMatch.map((j, i) => (j < 0 ? i : -1)).filter((i) => i >= 0);
+  const { rowSeen, colSeen } = alternatingReach(zeros, rowMatch, colMatch, free);
+  const coverRows: number[] = [];
+  const coverCols: number[] = [];
+  for (let i = 0; i < n; i++) if (!rowSeen[i]) coverRows.push(i);
+  for (let j = 0; j < n; j++) if (colSeen[j]) coverCols.push(j);
+  return { coverRows, coverCols, rowMatch };
+}
+
+function fmt(v: number): string {
+  const s = v.toFixed(6).replace(/\.?0+$/, "");
+  return s === "-0" ? "0" : s;
+}
+
+function listNames(names: string[]): string {
+  const quoted = names.map((s) => `«${s}»`);
+  if (quoted.length <= 1) return quoted.join("");
+  return `${quoted.slice(0, -1).join(", ")} y ${quoted[quoted.length - 1]}`;
+}
+
+function pairsOf(rowMatch: number[]): Pair[] {
+  return rowMatch.map((c, r) => [r, c] as Pair);
 }
 
 export function solve(body: unknown): ModuleResult {
   const req = parseAssignmentRequest(body);
   const nAgents = req.agents.length;
   const nTasks = req.tasks.length;
+  const n = Math.max(nAgents, nTasks);
+  const isMax = req.sense === "max";
+  const valueCol = isMax ? "ganancia" : "costo";
   const warnings: string[] = [];
 
-  const cost = cloneMat(req.costs);
   const agentIdx = new Map(req.agents.map((a, i) => [a, i]));
   const taskIdx = new Map(req.tasks.map((t, j) => [t, j]));
-  for (const [a, t] of req.forbidden_assignments) {
-    if (!agentIdx.has(a) || !taskIdx.has(t)) {
-      throw new SolverError(`forbidden assignment unknown: ${a}->${t}`);
-    }
-    cost[agentIdx.get(a)!][taskIdx.get(t)!] = BIG_M;
-    warnings.push(`Asignación prohibida ${a}->${t}`);
-  }
+  const forbidden = new Set<string>();
+  for (const [a, t] of req.forbidden_assignments) forbidden.add(`${agentIdx.get(a)}:${taskIdx.get(t)}`);
+  const isForbidden = (r: number, c: number) => forbidden.has(`${r}:${c}`);
 
-  const n = Math.max(nAgents, nTasks);
-  const agents = req.agents.concat(Array.from({ length: n - nAgents }, (_, k) => `_dummy_agent_${k}`));
-  const tasks = req.tasks.concat(Array.from({ length: n - nTasks }, (_, k) => `_dummy_task_${k}`));
-  if (n !== nAgents || n !== nTasks) {
-    warnings.push(`Matriz no cuadrada: relleno a ${n}×${n} con ficticios de costo 0`);
-  }
-  const padded = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  // Matriz cuadrada: los ficticios cuestan 0 y nunca están prohibidos.
+  const dummyRows = Array.from({ length: n - nAgents }, (_, k) => nAgents + k);
+  const dummyCols = Array.from({ length: n - nTasks }, (_, k) => nTasks + k);
+  const rowLabels = req.agents.concat(dummyRows.map((_, k) => `Agente ficticio ${k + 1}`));
+  const colLabels = req.tasks.concat(dummyCols.map((_, k) => `Tarea ficticia ${k + 1}`));
+  const padded = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) => (i < nAgents && j < nTasks ? req.costs[i][j] : 0)),
+  );
+  const forbiddenPairs: Pair[] = [];
   for (let i = 0; i < nAgents; i++) {
-    for (let j = 0; j < nTasks; j++) padded[i][j] = cost[i][j];
+    for (let j = 0; j < nTasks; j++) if (isForbidden(i, j)) forbiddenPairs.push([i, j]);
   }
-  const costOrig = cloneMat(padded);
+  if (dummyRows.length || dummyCols.length) {
+    const k = dummyRows.length || dummyCols.length;
+    const what = dummyRows.length
+      ? `${k === 1 ? "un agente ficticio" : `${k} agentes ficticios`}`
+      : `${k === 1 ? "una tarea ficticia" : `${k} tareas ficticias`}`;
+    const effect = dummyRows.length
+      ? `${k === 1 ? "una tarea queda" : `${k} tareas quedan`} sin agente`
+      : `${k === 1 ? "un agente queda" : `${k} agentes quedan`} sin tarea`;
+    warnings.push(`Matriz no cuadrada: se ${k === 1 ? "agregó" : "agregaron"} ${what} con ${valueCol} 0 para completar ${n}×${n}; ${effect}.`);
+  }
 
-  let work = cloneMat(padded);
-  if (req.sense === "max") {
-    const finite = work.flat().filter((v) => v < BIG_M / 2);
-    const mx = finite.length ? Math.max(...finite) : 0;
-    work = work.map((row) => row.map((v) => (v < BIG_M / 2 ? mx - v : v)));
-  }
+  const scale = Math.max(1, ...padded.flat().map((v) => Math.abs(v)));
+  const eps = 1e-9 * scale;
+  const snap = (v: number) => (Math.abs(v) < eps ? 0 : v);
+  const display = (m: number[][]): (number | string)[][] =>
+    m.map((row, i) => row.map((v, j) => (i < nAgents && j < nTasks && isForbidden(i, j) ? "M" : Number(v.toPrecision(12)))));
 
   const iterations: IterationStep[] = [];
-  const rowMin = work.map((row) => Math.min(...row));
-  let reduced = work.map((row, i) => row.map((v) => v - rowMin[i]));
-  iterations.push({
-    index: 0,
-    method: "hungarian",
-    title: "Reducción por filas",
-    tableau: cloneMat(reduced),
-    meta: { row_min: rowMin },
-  });
-  const colMin = Array.from({ length: n }, (_, j) => Math.min(...reduced.map((row) => row[j])));
-  reduced = reduced.map((row) => row.map((v, j) => v - colMin[j]));
-  iterations.push({
-    index: 1,
-    method: "hungarian",
-    title: "Reducción por columnas",
-    tableau: cloneMat(reduced),
-    meta: { col_min: colMin },
-  });
+  const push = (title: string, tableau: (number | string)[][] | null, meta: Record<string, unknown>) => {
+    iterations.push({ index: iterations.length, method: "hungarian", title, tableau, meta });
+  };
+  push(
+    `Matriz de ${isMax ? "ganancias" : "costos"}${n !== nAgents || n !== nTasks ? " completada con ficticios" : ""}`,
+    display(padded),
+    {
+      kind: "initial",
+      sense: req.sense,
+      row_labels: rowLabels,
+      col_labels: colLabels,
+      dummy_rows: dummyRows,
+      dummy_cols: dummyCols,
+      forbidden: forbiddenPairs,
+    },
+  );
 
-  let mat = cloneMat(reduced);
-  let step = 2;
-  for (let _ = 0; _ < n * 2; _++) {
-    const { coverRows, coverCols } = minLineCover(zerosOf(mat));
-    const coverRowSet = new Set(coverRows);
-    const coverColSet = new Set(coverCols);
-    iterations.push({
-      index: step,
-      method: "hungarian",
-      title: `Cobertura de ceros (${coverRows.length} filas + ${coverCols.length} columnas)`,
-      tableau: cloneMat(mat),
-      meta: { cover_rows: coverRows, cover_cols: coverCols },
+  const costsTable: NamedTable = {
+    name: "matriz_original",
+    columns: ["agente", ...req.tasks],
+    rows: req.agents.map((a, i) => [a, ...req.tasks.map((_, j) => (isForbidden(i, j) ? "M" : req.costs[i][j]))]),
+  };
+
+  // Factibilidad: con las prohibiciones, ¿cabe una asignación completa?
+  const allowed = padded.map((row, i) => row.map((_, j) => !(i < nAgents && j < nTasks && isForbidden(i, j))));
+  const feasible = maxMatching(allowed);
+  if (feasible.size < n) {
+    const free = feasible.rowMatch.map((c, r) => (c < 0 ? r : -1)).filter((r) => r >= 0).slice(0, 1);
+    const { rowSeen, colSeen } = alternatingReach(allowed, feasible.rowMatch, feasible.colMatch, free);
+    const stuckAgents = rowLabels.filter((_, i) => rowSeen[i]);
+    const reachTasks = colLabels.filter((_, j) => colSeen[j] && j < nTasks);
+    const reachDummy = dummyCols.some((j) => colSeen[j]);
+    const options = reachTasks.length
+      ? `${reachTasks.length === 1 ? "la tarea" : "las tareas"} ${listNames(reachTasks)}${reachDummy ? " o quedarse sin tarea" : ""}`
+      : "quedarse sin tarea";
+    const reason =
+      stuckAgents.length === 1
+        ? `${listNames(stuckAgents)} tiene prohibidas todas las tareas.`
+        : `${listNames(stuckAgents)} solo pueden ir a ${options}: no alcanzan para todos.`;
+    return okResult("assignment", {
+      status: "infeasible",
+      variables: {},
+      objective_value: null,
+      objective_sense: req.sense,
+      metrics: {},
+      iterations,
+      graph: null,
+      tables: [costsTable],
+      warnings: [`No existe una asignación que respete las prohibiciones: ${reason}`, ...warnings],
     });
-    step += 1;
-    if (coverRows.length + coverCols.length >= n) break;
-    const uncovered: number[] = [];
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (!coverRowSet.has(i) && !coverColSet.has(j)) uncovered.push(mat[i][j]);
-      }
-    }
-    if (!uncovered.length) break;
-    const delta = Math.min(...uncovered);
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (!coverRowSet.has(i) && !coverColSet.has(j)) mat[i][j] -= delta;
-        else if (coverRowSet.has(i) && coverColSet.has(j)) mat[i][j] += delta;
-      }
-    }
-    iterations.push({
-      index: step,
-      method: "hungarian",
-      title: `Ajuste de celdas no cubiertas en ${delta}`,
-      tableau: cloneMat(mat),
-      meta: { delta },
-    });
-    step += 1;
   }
 
-  const { rows, cols } = linearSumAssignment(work);
-  iterations.push({
-    index: step,
-    method: "hungarian",
-    title: "Asignación óptima",
-    tableau: null,
-    meta: { rows, cols },
+  let work = cloneMat(padded);
+  if (isMax) {
+    const finite = padded.flatMap((row, i) => row.filter((_, j) => allowed[i][j]));
+    const mx = Math.max(...finite);
+    work = work.map((row, i) => row.map((v, j) => (allowed[i][j] ? mx - v : BIG_M)));
+    push(`Maximizar: pérdida de oportunidad (${fmt(mx)} menos cada valor)`, display(work), { kind: "regret", max_value: mx });
+  } else {
+    work = work.map((row, i) => row.map((v, j) => (allowed[i][j] ? v : BIG_M)));
+  }
+
+  const rowMin = work.map((row) => Math.min(...row));
+  let mat = work.map((row, i) => row.map((v) => snap(v - rowMin[i])));
+  push("Reducción por filas: a cada fila se le resta su mínimo", display(mat), { kind: "row_reduction", row_min: rowMin });
+  const colMin = Array.from({ length: n }, (_, j) => Math.min(...mat.map((row) => row[j])));
+  mat = mat.map((row) => row.map((v, j) => snap(v - colMin[j])));
+  push("Reducción por columnas: a cada columna se le resta su mínimo", display(mat), {
+    kind: "col_reduction",
+    col_min: colMin,
   });
 
+  let assignment: number[] | null = null;
+  let adjustments = 0;
+  for (let guard = 0; guard < n * n + 2 * n + 4; guard++) {
+    const zeros = mat.map((row) => row.map((v) => v === 0));
+    const { coverRows, coverCols, rowMatch } = minLineCover(zeros);
+    const lines = coverRows.length + coverCols.length;
+    const independent = pairsOf(rowMatch).filter(([, c]) => c >= 0);
+    push(
+      lines >= n
+        ? `Cubrir ceros: ${lines} líneas = ${n}, ya hay asignación óptima`
+        : `Cubrir ceros: ${lines} ${lines === 1 ? "línea" : "líneas"} < ${n}, falta ajustar`,
+      display(mat),
+      { kind: "cover", cover_rows: coverRows, cover_cols: coverCols, lines, n, independent_zeros: independent },
+    );
+    if (lines >= n) {
+      assignment = rowMatch;
+      break;
+    }
+    const rowCov = new Set(coverRows);
+    const colCov = new Set(coverCols);
+    let delta = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < n; i++) {
+      if (rowCov.has(i)) continue;
+      for (let j = 0; j < n; j++) if (!colCov.has(j)) delta = Math.min(delta, mat[i][j]);
+    }
+    mat = mat.map((row, i) =>
+      row.map((v, j) => {
+        if (!rowCov.has(i) && !colCov.has(j)) return snap(v - delta);
+        if (rowCov.has(i) && colCov.has(j)) return snap(v + delta);
+        return v;
+      }),
+    );
+    adjustments += 1;
+    push(`Ajuste con el mínimo no cubierto (${fmt(delta)})`, display(mat), {
+      kind: "adjust",
+      delta,
+      cover_rows: coverRows,
+      cover_cols: coverCols,
+    });
+  }
+  if (!assignment) {
+    // Red de seguridad numérica: no debería ocurrir con la cobertura mínima.
+    const { cols } = linearSumAssignment(work);
+    assignment = cols;
+  }
+
+  const finalPairs = pairsOf(assignment);
+  push("Asignación óptima: un cero por fila y por columna", display(mat), { kind: "assignment", assigned: finalPairs });
+
+  const isReal = (r: number, c: number) => r < nAgents && c < nTasks;
   const variables: Record<string, number> = {};
   let total = 0;
-  const pairs: (string | number)[][] = [];
-  for (let k = 0; k < rows.length; k++) {
-    const r = rows[k];
-    const c = cols[k];
-    if (agents[r].startsWith("_dummy") || tasks[c].startsWith("_dummy")) continue;
-    if (costOrig[r][c] >= BIG_M / 2) {
-      warnings.push(`Asignación ${agents[r]}->${tasks[c]} usa ruta de costo M (revisar factibilidad)`);
-    }
-    const key = `${agents[r]}->${tasks[c]}`;
-    variables[key] = 1;
-    total += costOrig[r][c];
-    pairs.push([agents[r], tasks[c], costOrig[r][c]]);
+  const rows: (string | number)[][] = [];
+  for (const [r, c] of finalPairs) {
+    if (!isReal(r, c)) continue;
+    variables[`${req.agents[r]}->${req.tasks[c]}`] = 1;
+    total += req.costs[r][c];
+    rows.push([req.agents[r], req.tasks[c], req.costs[r][c]]);
   }
+
+  const tables: NamedTable[] = [{ name: "assignment", columns: ["agente", "tarea", valueCol], rows }];
+  const unassigned: string[][] = [];
+  for (const [r, c] of finalPairs) {
+    if (r < nAgents && c >= nTasks) unassigned.push(["agente", req.agents[r]]);
+    if (c < nTasks && r >= nAgents) unassigned.push(["tarea", req.tasks[c]]);
+  }
+  if (unassigned.length) tables.push({ name: "sin_asignar", columns: ["tipo", "nombre"], rows: unassigned });
+
+  // Óptimos alternativos: otra asignación completa sobre los ceros finales.
+  const finalZeros = mat.map((row) => row.map((v) => v === 0));
+  for (const [r, c] of finalPairs) {
+    if (!isReal(r, c)) continue;
+    const banned = finalZeros.map((row, i) => row.map((z, j) => z && !(i === r && j === c)));
+    const alt = maxMatching(banned);
+    if (alt.size < n) continue;
+    const altRows = pairsOf(alt.rowMatch)
+      .filter(([ar, ac]) => isReal(ar, ac))
+      .map(([ar, ac]) => [req.agents[ar], req.tasks[ac], req.costs[ar][ac]]);
+    warnings.push(
+      `Existen óptimos múltiples: otra asignación logra el mismo total de ${fmt(total)} (ver tabla Asignación alternativa).`,
+    );
+    tables.push({ name: "asignacion_alternativa", columns: ["agente", "tarea", valueCol], rows: altRows });
+    break;
+  }
+  tables.push(costsTable);
 
   const graph: GraphMatrix = {
     type: "matrix",
@@ -295,10 +463,10 @@ export function solve(body: unknown): ModuleResult {
     variables,
     objective_value: total,
     objective_sense: req.sense,
-    metrics: { total, n_assignments: pairs.length },
+    metrics: { total, n_assignments: rows.length, n_adjustments: adjustments },
     iterations,
     graph,
-    tables: [{ name: "assignment", columns: ["agente", "tarea", "costo"], rows: pairs }],
+    tables,
     warnings,
   });
 }
