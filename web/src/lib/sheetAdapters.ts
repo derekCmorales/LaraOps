@@ -201,16 +201,6 @@ export function sheetToLp(matrix: SheetMatrix): LpBody {
   return { sense, objective, constraints, variable_names: varNames };
 }
 
-/** Plantilla vacía asignación: 2×2 con sentido en hoja. */
-export function emptyAssignmentSheet(): SheetMatrix {
-  return [
-    ["Sentido", "Min"],
-    ["Agente", "T1", "T2"],
-    ["A1", 0, 0],
-    ["A2", 0, 0],
-  ];
-}
-
 /** Plantilla vacía EOQ. */
 export function emptyEoqSheet(): SheetMatrix {
   return [
@@ -238,45 +228,6 @@ export function emptyPertSheet(): SheetMatrix {
     ],
     ["A", "", "", "", "", "", "", "", ""],
   ];
-}
-
-export type AssignmentBody = {
-  agents: string[];
-  tasks: string[];
-  costs: number[][];
-  sense: "min" | "max";
-};
-
-export function assignmentToSheet(body: AssignmentBody): SheetMatrix {
-  const senseLabel = body.sense === "max" ? "Max" : "Min";
-  const header: Cell[] = ["Agente", ...body.tasks];
-  const rows = body.agents.map((a, i) => [a, ...(body.costs[i] ?? body.tasks.map(() => 0))]);
-  return [["Sentido", senseLabel], header, ...rows];
-}
-
-function parseAssignmentSense(raw: string): "min" | "max" {
-  const k = normKey(raw);
-  return k.startsWith("max") ? "max" : "min";
-}
-
-export function sheetToAssignment(matrix: SheetMatrix, senseFallback: "min" | "max" = "min"): AssignmentBody {
-  let offset = 0;
-  let sense = senseFallback;
-  if (matrix.length > 0 && normKey(str(matrix[0][0])) === "sentido") {
-    sense = parseAssignmentSense(str(matrix[0][1]));
-    offset = 1;
-  }
-  if (matrix.length < offset + 2) throw new Error("La hoja necesita encabezado y filas de agentes");
-  const tasks = matrix[offset].slice(1).map(str);
-  const agents: string[] = [];
-  const costs: number[][] = [];
-  for (const row of matrix.slice(offset + 1)) {
-    const a = str(row[0]);
-    if (!a || normKey(a) === "sentido") continue;
-    agents.push(a);
-    costs.push(tasks.map((_, i) => num(row[i + 1])));
-  }
-  return { agents, tasks, costs, sense };
 }
 
 export type PertBody = {

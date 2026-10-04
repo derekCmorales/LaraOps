@@ -11,6 +11,7 @@ import {
 import ChartViews from "./ChartViews";
 import PertResults from "./PertResults";
 import EoqResults, { EoqInventoryChart } from "./EoqResults";
+import AssignmentResults, { AssignmentDiagram, HungarianSteps } from "./AssignmentResults";
 import TransportIterations from "./TransportIterations";
 import TransportResults, { TransportFlowMap, TransportSensitivity } from "./TransportResults";
 import Explainer from "./Explainer";
@@ -310,6 +311,8 @@ export default function ResultsTabs({ result }: Props) {
             <PertResults result={result} />
           ) : result.module === "eoq" ? (
             <EoqResults result={result} />
+          ) : result.module === "assignment" ? (
+            <AssignmentResults result={result} />
           ) : isTransport ? (
             <TransportResults result={result} />
           ) : isLp ? (
@@ -324,7 +327,14 @@ export default function ResultsTabs({ result }: Props) {
       list.push({
         id: "iterations",
         label: "Iteraciones",
-        content: isTransport ? <TransportIterations result={result} /> : <IterationsViewer steps={steps} />,
+        content:
+          result.module === "assignment" ? (
+            <HungarianSteps result={result} />
+          ) : isTransport ? (
+            <TransportIterations result={result} />
+          ) : (
+            <IterationsViewer steps={steps} />
+          ),
       });
     }
     if (result.sensitivity) {
@@ -344,6 +354,8 @@ export default function ResultsTabs({ result }: Props) {
               <ChartViews result={result} />
               <EoqInventoryChart result={result} />
             </div>
+          ) : result.module === "assignment" ? (
+            <AssignmentDiagram result={result} />
           ) : isTransport ? (
             <div className="pert-visuals">
               <TransportFlowMap result={result} />
@@ -393,11 +405,15 @@ export default function ResultsTabs({ result }: Props) {
         valueLabel={
           result.module === "pert_cpm"
             ? "Duración"
-            : result.module === "transport"
+            : result.module === "assignment"
               ? result.solution.objective_sense === "max"
-                ? "Ganancia"
-                : "Costo"
-              : "Z"
+                ? "Ganancia total"
+                : "Costo total"
+              : result.module === "transport"
+                ? result.solution.objective_sense === "max"
+                  ? "Ganancia total"
+                  : "Costo total"
+                : "Z"
         }
       />
       <div className="result-tabs" role="tablist" aria-label="Vistas del resultado">

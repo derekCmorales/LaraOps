@@ -23,7 +23,17 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
     module: "assignment",
     title: "Asignación",
     required: ["agents", "tasks", "costs"],
-    example: { agents: ["A1"], tasks: ["T1"], costs: [[0]], sense: "min" },
+    example: {
+      agents: ["A1", "A2"],
+      tasks: ["T1", "T2"],
+      costs: [
+        [4, 2],
+        [3, 5],
+      ],
+      sense: "min",
+      forbidden_assignments: [["A1", "T2"]],
+    },
+    notes: "sense: min o max. forbidden_assignments (opcional): parejas [agente, tarea] prohibidas.",
   },
   queues: {
     module: "queues",
