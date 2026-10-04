@@ -34,11 +34,6 @@ function str(v: Cell): string {
   return v === null || v === undefined ? "" : String(v).trim();
 }
 
-function isHeaderMatch(cell: string, ...aliases: string[]): boolean {
-  const n = cell.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
-  return aliases.some((a) => n === a.toLowerCase().normalize("NFD").replace(/\p{M}/gu, ""));
-}
-
 /** EOQ: Parámetro | Valor */
 export function eoqToSheet(body: { D: number; S: number; H: number; C: number }): SheetMatrix {
   return [
@@ -206,15 +201,6 @@ export function sheetToLp(matrix: SheetMatrix): LpBody {
   return { sense, objective, constraints, variable_names: varNames };
 }
 
-/** Plantilla vacía transporte: 1 origen, 1 destino. */
-export function emptyTransportSheet(): SheetMatrix {
-  return [
-    ["Origen", "D1", "Oferta"],
-    ["O1", 0, 0],
-    ["Demanda", 0, ""],
-  ];
-}
-
 /** Plantilla vacía EOQ. */
 export function emptyEoqSheet(): SheetMatrix {
   return [
@@ -242,51 +228,6 @@ export function emptyPertSheet(): SheetMatrix {
     ],
     ["A", "", "", "", "", "", "", "", ""],
   ];
-}
-
-export type TransportBody = {
-  supply: Record<string, number>;
-  demand: Record<string, number>;
-  costs: Record<string, Record<string, number>>;
-  method: string;
-};
-
-/** Transporte: orígenes × destinos; última col Oferta; última fila Demanda */
-export function transportToSheet(body: TransportBody): SheetMatrix {
-  const sources = Object.keys(body.supply);
-  const dests = Object.keys(body.demand);
-  const header: Cell[] = ["Origen", ...dests, "Oferta"];
-  const rows = sources.map((s) => [
-    s,
-    ...dests.map((d) => body.costs[s]?.[d] ?? 0),
-    body.supply[s] ?? 0,
-  ]);
-  const demandRow: Cell[] = ["Demanda", ...dests.map((d) => body.demand[d] ?? 0), ""];
-  return [header, ...rows, demandRow];
-}
-
-export function sheetToTransport(matrix: SheetMatrix, method = "modi_auto"): TransportBody {
-  if (matrix.length < 3) throw new Error("La hoja necesita encabezado, orígenes y fila de Demanda");
-  const header = matrix[0].map(str);
-  const dests = header.slice(1, -1);
-  const dataRows = matrix.slice(1, -1);
-  const demandRow = matrix[matrix.length - 1];
-  const supply: Record<string, number> = {};
-  const demand: Record<string, number> = {};
-  const costs: Record<string, Record<string, number>> = {};
-  for (const row of dataRows) {
-    const s = str(row[0]);
-    if (!s || isHeaderMatch(s, "demanda", "demand")) continue;
-    supply[s] = num(row[row.length - 1]);
-    costs[s] = {};
-    dests.forEach((d, i) => {
-      costs[s][d] = num(row[i + 1]);
-    });
-  }
-  dests.forEach((d, i) => {
-    demand[d] = num(demandRow[i + 1]);
-  });
-  return { supply, demand, costs, method };
 }
 
 export type PertBody = {

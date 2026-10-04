@@ -11,6 +11,7 @@ type Props = {
 function toneFor(status: string, warnings: string[]): "ok" | "warn" | "error" {
   const s = status.toLowerCase();
   if (s.includes("infeasible") || s.includes("unbounded") || s === "error") return "error";
+  if (s === "feasible") return "warn";
   if (
     warnings.some((w) =>
       /degener|múltipl|multiple|inestabl|óptimos múltiples|optimos multiples/i.test(w)

@@ -12,6 +12,8 @@ import ChartViews from "./ChartViews";
 import PertResults from "./PertResults";
 import EoqResults, { EoqInventoryChart } from "./EoqResults";
 import AssignmentResults, { AssignmentDiagram, HungarianSteps } from "./AssignmentResults";
+import TransportIterations from "./TransportIterations";
+import TransportResults, { TransportFlowMap, TransportSensitivity } from "./TransportResults";
 import Explainer from "./Explainer";
 import IterationsViewer, { type IterationStepView } from "./IterationsViewer";
 import SolutionTable from "./SolutionTable";
@@ -299,6 +301,7 @@ function GenericSolutionPane({ result }: Props) {
 export default function ResultsTabs({ result }: Props) {
   const panes = useMemo(() => {
     const isLp = result.module === "linear_programming";
+    const isTransport = result.module === "transport";
     const list: { id: string; label: string; content: ReactNode }[] = [
       {
         id: "solution",
@@ -310,6 +313,8 @@ export default function ResultsTabs({ result }: Props) {
             <EoqResults result={result} />
           ) : result.module === "assignment" ? (
             <AssignmentResults result={result} />
+          ) : isTransport ? (
+            <TransportResults result={result} />
           ) : isLp ? (
             <LpSolutionPane result={result} />
           ) : (
@@ -323,11 +328,21 @@ export default function ResultsTabs({ result }: Props) {
         id: "iterations",
         label: "Iteraciones",
         content:
-          result.module === "assignment" ? <HungarianSteps result={result} /> : <IterationsViewer steps={steps} />,
+          result.module === "assignment" ? (
+            <HungarianSteps result={result} />
+          ) : isTransport ? (
+            <TransportIterations result={result} />
+          ) : (
+            <IterationsViewer steps={steps} />
+          ),
       });
     }
     if (result.sensitivity) {
-      list.push({ id: "sensitivity", label: "Sensibilidad", content: <SensitivityPane result={result} /> });
+      list.push({
+        id: "sensitivity",
+        label: "Sensibilidad",
+        content: isTransport ? <TransportSensitivity result={result} /> : <SensitivityPane result={result} />,
+      });
     }
     if (result.graph) {
       list.push({
@@ -341,12 +356,18 @@ export default function ResultsTabs({ result }: Props) {
             </div>
           ) : result.module === "assignment" ? (
             <AssignmentDiagram result={result} />
+          ) : isTransport ? (
+            <div className="pert-visuals">
+              <TransportFlowMap result={result} />
+              <ChartViews result={result} />
+            </div>
           ) : (
             <ChartViews result={result} />
           ),
       });
     }
-    if (result.tables?.length) {
+    // Transporte ya muestra sus tablas en Solución; no se repiten.
+    if (result.tables?.length && !isTransport) {
       list.push({
         id: "tables",
         label: "Tablas",
@@ -388,7 +409,11 @@ export default function ResultsTabs({ result }: Props) {
               ? result.solution.objective_sense === "max"
                 ? "Ganancia total"
                 : "Costo total"
-              : "Z"
+              : result.module === "transport"
+                ? result.solution.objective_sense === "max"
+                  ? "Ganancia total"
+                  : "Costo total"
+                : "Z"
         }
       />
       <div className="result-tabs" role="tablist" aria-label="Vistas del resultado">

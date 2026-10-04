@@ -1,4 +1,4 @@
-export type SolveStatus = "optimal" | "ok" | "infeasible" | "unbounded" | "error";
+export type SolveStatus = "optimal" | "ok" | "feasible" | "infeasible" | "unbounded" | "error";
 
 export type SolutionBlock = {
   variables: Record<string, number>;
