@@ -27,7 +27,7 @@ def test_eoq_solve_endpoint(client):
     assert_allclose(body["solution"]["metrics"]["TC_ordering"], 50.0)
     assert_allclose(body["solution"]["metrics"]["TC_holding"], 50.0)
     series_names = {s["name"] for s in body["graph"]["series"]}
-    assert series_names == {"TC", "ordering", "holding"}
+    assert series_names == {"relevant_cost", "ordering", "holding"}
 
 
 def test_eoq_export_xlsx(client):

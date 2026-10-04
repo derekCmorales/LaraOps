@@ -30,6 +30,8 @@ type Props = {
   sheetKind?: SheetEditorKind;
   /** Reemplaza la hoja genérica cuando el módulo tiene su propio editor. */
   editor?: ReactNode;
+  /** El editor funciona bien en pantallas chicas: oculta el aviso móvil. */
+  mobileFriendly?: boolean;
 };
 
 export default function ModuleWorkbench({
@@ -51,6 +53,7 @@ export default function ModuleWorkbench({
   modelPreview,
   sheetKind = "generic",
   editor,
+  mobileFriendly = false,
 }: Props) {
   const [tab, setTab] = useState<"datos" | "resultados">("datos");
   const [result, setResult] = useState<ModuleResult | null>(null);
@@ -68,6 +71,11 @@ export default function ModuleWorkbench({
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   });
+
+  // Un error de validación ya no aplica cuando cambian los datos.
+  useEffect(() => {
+    setError(null);
+  }, [matrix]);
 
   async function runSolve() {
     setError(null);
@@ -110,6 +118,7 @@ export default function ModuleWorkbench({
       tab={tab}
       onTabChange={setTab}
       resultsEnabled={!!result}
+      showMobileNotice={!mobileFriendly}
       headerRight={
         <ExportMenu
           disabled={!result && !exportPdf}

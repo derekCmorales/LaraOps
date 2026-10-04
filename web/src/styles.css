@@ -1912,6 +1912,200 @@ textarea {
   gap: calc(var(--space) * 5);
 }
 
+/* ——— EOQ ——— */
+.eoq-editor {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 5);
+}
+
+.eoq-section {
+  margin: 0;
+  padding: calc(var(--space) * 4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  min-width: 0;
+}
+
+.eoq-section legend {
+  padding: 0 calc(var(--space) * 2);
+  font-family: var(--font-display);
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.eoq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: calc(var(--space) * 4) calc(var(--space) * 5);
+  align-items: start;
+}
+
+.eoq-field {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 1.5);
+  min-width: 0;
+}
+
+.eoq-field label,
+.eoq-label {
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--ink-600);
+}
+
+.eoq-holding {
+  gap: calc(var(--space) * 2.5);
+}
+
+.eoq-input {
+  display: flex;
+  align-items: stretch;
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.eoq-input:focus-within {
+  outline: 2px solid var(--ink-900);
+  outline-offset: 1px;
+}
+
+.eoq-input input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: calc(var(--space) * 2.5) calc(var(--space) * 3);
+  color: var(--ink-900);
+  font-family: var(--font-data);
+  font-size: var(--text-body);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.eoq-input input:focus {
+  outline: none;
+}
+
+.eoq-unit {
+  display: flex;
+  align-items: center;
+  padding: 0 calc(var(--space) * 3);
+  border-left: var(--border);
+  background: var(--ink-100);
+  color: var(--ink-400);
+  font-size: var(--text-caption);
+  white-space: nowrap;
+}
+
+.eoq-input.is-invalid {
+  border-color: var(--error);
+  background: color-mix(in srgb, var(--error) 6%, var(--paper-raised));
+}
+
+.eoq-error {
+  margin: 0;
+  color: var(--error);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.eoq-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.eoq-toggle-btn {
+  border: 0;
+  background: var(--paper-raised);
+  color: var(--ink-600);
+  padding: calc(var(--space) * 1.5) calc(var(--space) * 3);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.eoq-toggle-btn + .eoq-toggle-btn {
+  border-left: var(--border);
+}
+
+.eoq-toggle-btn.is-on {
+  background: var(--ink-900);
+  color: var(--paper);
+}
+
+.eoq-period {
+  margin-top: calc(var(--space) * 4);
+}
+
+.eoq-preview {
+  padding: calc(var(--space) * 3) calc(var(--space) * 4);
+  border-left: 3px solid var(--pivot);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--pivot) 5%, var(--paper-raised));
+}
+
+.eoq-preview-label {
+  display: block;
+  margin-bottom: calc(var(--space) * 1);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+
+.eoq-formula {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  overflow-wrap: anywhere;
+}
+
+.eoq-formula strong {
+  color: var(--pivot);
+}
+
+.eoq-preview-facts {
+  margin: calc(var(--space) * 1) 0 0;
+  color: var(--ink-600);
+  font-size: var(--text-label);
+}
+
+.pert-kpi small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-400);
+  font-size: var(--text-caption);
+}
+
+.eoq-kpi-main {
+  border-color: var(--pivot);
+  box-shadow: inset 3px 0 0 var(--pivot);
+}
+
+.eoq-kpi-main strong {
+  color: var(--pivot);
+}
+
+.eoq-policy {
+  margin: 0 0 calc(var(--space) * 4);
+  padding: calc(var(--space) * 3) calc(var(--space) * 4);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  max-width: 80ch;
+}
+
 @media (max-width: 1024px) {
   .iter-viewer {
     grid-template-columns: 1fr;

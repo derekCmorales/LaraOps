@@ -9,6 +9,7 @@ type Props = {
   resultsEnabled: boolean;
   headerRight?: ReactNode;
   actionBar?: ReactNode;
+  showMobileNotice?: boolean;
   children: ReactNode;
 };
 
@@ -20,6 +21,7 @@ export default function ModuleShell({
   resultsEnabled,
   headerRight,
   actionBar,
+  showMobileNotice = true,
   children,
 }: Props) {
   return (
@@ -56,10 +58,12 @@ export default function ModuleShell({
         </button>
       </div>
 
-      <p className="mobile-notice">
-        La captura de modelos funciona mejor en pantalla grande. Puedes ver y exportar resultados desde
-        aquí.
-      </p>
+      {showMobileNotice ? (
+        <p className="mobile-notice">
+          La captura de modelos funciona mejor en pantalla grande. Puedes ver y exportar resultados desde
+          aquí.
+        </p>
+      ) : null}
 
       {children}
       {tab === "datos" && actionBar ? <div className="shell-actionbar">{actionBar}</div> : null}
