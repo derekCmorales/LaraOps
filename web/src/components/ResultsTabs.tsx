@@ -11,6 +11,8 @@ import {
 import ChartViews from "./ChartViews";
 import PertResults from "./PertResults";
 import EoqResults, { EoqInventoryChart } from "./EoqResults";
+import TransportIterations from "./TransportIterations";
+import TransportResults, { TransportFlowMap, TransportSensitivity } from "./TransportResults";
 import Explainer from "./Explainer";
 import IterationsViewer, { type IterationStepView } from "./IterationsViewer";
 import SolutionTable from "./SolutionTable";
@@ -298,6 +300,7 @@ function GenericSolutionPane({ result }: Props) {
 export default function ResultsTabs({ result }: Props) {
   const panes = useMemo(() => {
     const isLp = result.module === "linear_programming";
+    const isTransport = result.module === "transport";
     const list: { id: string; label: string; content: ReactNode }[] = [
       {
         id: "solution",
@@ -307,6 +310,8 @@ export default function ResultsTabs({ result }: Props) {
             <PertResults result={result} />
           ) : result.module === "eoq" ? (
             <EoqResults result={result} />
+          ) : isTransport ? (
+            <TransportResults result={result} />
           ) : isLp ? (
             <LpSolutionPane result={result} />
           ) : (
@@ -319,11 +324,15 @@ export default function ResultsTabs({ result }: Props) {
       list.push({
         id: "iterations",
         label: "Iteraciones",
-        content: <IterationsViewer steps={steps} />,
+        content: isTransport ? <TransportIterations result={result} /> : <IterationsViewer steps={steps} />,
       });
     }
     if (result.sensitivity) {
-      list.push({ id: "sensitivity", label: "Sensibilidad", content: <SensitivityPane result={result} /> });
+      list.push({
+        id: "sensitivity",
+        label: "Sensibilidad",
+        content: isTransport ? <TransportSensitivity result={result} /> : <SensitivityPane result={result} />,
+      });
     }
     if (result.graph) {
       list.push({
@@ -335,12 +344,18 @@ export default function ResultsTabs({ result }: Props) {
               <ChartViews result={result} />
               <EoqInventoryChart result={result} />
             </div>
+          ) : isTransport ? (
+            <div className="pert-visuals">
+              <TransportFlowMap result={result} />
+              <ChartViews result={result} />
+            </div>
           ) : (
             <ChartViews result={result} />
           ),
       });
     }
-    if (result.tables?.length) {
+    // Transporte ya muestra sus tablas en Solución; no se repiten.
+    if (result.tables?.length && !isTransport) {
       list.push({
         id: "tables",
         label: "Tablas",
@@ -375,7 +390,15 @@ export default function ResultsTabs({ result }: Props) {
         objectiveValue={result.solution.objective_value}
         objectiveSense={result.solution.objective_sense}
         warnings={result.warnings}
-        valueLabel={result.module === "pert_cpm" ? "Duración" : "Z"}
+        valueLabel={
+          result.module === "pert_cpm"
+            ? "Duración"
+            : result.module === "transport"
+              ? result.solution.objective_sense === "max"
+                ? "Ganancia"
+                : "Costo"
+              : "Z"
+        }
       />
       <div className="result-tabs" role="tablist" aria-label="Vistas del resultado">
         {panes.map((p) => (

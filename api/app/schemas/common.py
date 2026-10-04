@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class SolveStatus(str, Enum):
     optimal = "optimal"  # optimization modules with proven optimum
     ok = "ok"  # closed-form modules (EOQ, queues metrics)
+    feasible = "feasible"  # valid solution without proven optimum (e.g. initial transport methods)
     infeasible = "infeasible"
     unbounded = "unbounded"
     error = "error"
