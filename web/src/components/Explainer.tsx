@@ -82,9 +82,40 @@ function explainEoq(result: ModuleResult): string {
   return bits.join(" ");
 }
 
+function explainAssignment(result: ModuleResult): string {
+  const isMax = result.solution.objective_sense === "max";
+  const word = isMax ? "ganancia" : "costo";
+  if (result.status.toLowerCase() === "infeasible") {
+    return "Las celdas prohibidas (M) dejan al menos a un agente sin opciones suficientes, así que no hay forma de dar una tarea distinta a cada uno. Quita alguna prohibición o agrega tareas para que exista solución.";
+  }
+  const m = result.solution.metrics || {};
+  const bits: string[] = [];
+  bits.push(
+    `Cada agente hace a lo más una tarea y cada tarea la hace a lo más un agente. Ninguna otra combinación logra un${isMax ? "a ganancia total mayor" : " costo total menor"} que ${fmtNum(result.solution.objective_value)}.`
+  );
+  if (isMax) {
+    bits.push("Para maximizar, el método trabaja con la pérdida de oportunidad (el mayor valor menos cada celda) y la minimiza.");
+  }
+  const adjustments = Number(m.n_adjustments ?? 0);
+  bits.push(
+    adjustments === 0
+      ? "Bastó con restar el mínimo de cada fila y de cada columna para encontrar un cero por fila y columna."
+      : `Después de reducir filas y columnas hizo falta ajustar la matriz ${adjustments === 1 ? "una vez" : `${adjustments} veces`} hasta que el número de líneas que cubren los ceros igualó al número de filas.`
+  );
+  if (result.warnings.some((w) => /no cuadrada/i.test(w))) {
+    bits.push(`Como la matriz no era cuadrada se agregaron ficticios con ${word} 0; quien queda en un ficticio se queda sin pareja real.`);
+  }
+  if (result.warnings.some((w) => /óptimos múltiples/i.test(w))) {
+    bits.push("Hay otra asignación con el mismo total: puedes elegir cualquiera de las dos según otros criterios.");
+  }
+  bits.push("Revisa la pestaña Iteraciones para seguir el método húngaro paso a paso.");
+  return bits.join(" ");
+}
+
 function explain(result: ModuleResult): string {
   if (result.module === "pert_cpm") return explainPert(result);
   if (result.module === "eoq") return explainEoq(result);
+  if (result.module === "assignment") return explainAssignment(result);
   const s = result.status.toLowerCase();
   const z = result.solution.objective_value;
   const warnings = result.warnings || [];

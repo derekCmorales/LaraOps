@@ -11,6 +11,7 @@ import {
 import ChartViews from "./ChartViews";
 import PertResults from "./PertResults";
 import EoqResults, { EoqInventoryChart } from "./EoqResults";
+import AssignmentResults, { AssignmentDiagram, HungarianSteps } from "./AssignmentResults";
 import Explainer from "./Explainer";
 import IterationsViewer, { type IterationStepView } from "./IterationsViewer";
 import SolutionTable from "./SolutionTable";
@@ -307,6 +308,8 @@ export default function ResultsTabs({ result }: Props) {
             <PertResults result={result} />
           ) : result.module === "eoq" ? (
             <EoqResults result={result} />
+          ) : result.module === "assignment" ? (
+            <AssignmentResults result={result} />
           ) : isLp ? (
             <LpSolutionPane result={result} />
           ) : (
@@ -319,7 +322,8 @@ export default function ResultsTabs({ result }: Props) {
       list.push({
         id: "iterations",
         label: "Iteraciones",
-        content: <IterationsViewer steps={steps} />,
+        content:
+          result.module === "assignment" ? <HungarianSteps result={result} /> : <IterationsViewer steps={steps} />,
       });
     }
     if (result.sensitivity) {
@@ -335,6 +339,8 @@ export default function ResultsTabs({ result }: Props) {
               <ChartViews result={result} />
               <EoqInventoryChart result={result} />
             </div>
+          ) : result.module === "assignment" ? (
+            <AssignmentDiagram result={result} />
           ) : (
             <ChartViews result={result} />
           ),
@@ -375,7 +381,15 @@ export default function ResultsTabs({ result }: Props) {
         objectiveValue={result.solution.objective_value}
         objectiveSense={result.solution.objective_sense}
         warnings={result.warnings}
-        valueLabel={result.module === "pert_cpm" ? "Duración" : "Z"}
+        valueLabel={
+          result.module === "pert_cpm"
+            ? "Duración"
+            : result.module === "assignment"
+              ? result.solution.objective_sense === "max"
+                ? "Ganancia total"
+                : "Costo total"
+              : "Z"
+        }
       />
       <div className="result-tabs" role="tablist" aria-label="Vistas del resultado">
         {panes.map((p) => (

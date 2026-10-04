@@ -97,7 +97,7 @@ export const MODULES: ModuleMeta[] = [
     name: "Asignación",
     methods: "Método húngaro",
     group: "Redes y flujo",
-    keywords: ["asignación", "húngaro", "hungarian"],
+    keywords: ["asignación", "húngaro", "hungarian", "asignar", "trabajadores", "máquinas", "tareas"],
     api: "assignment",
     migrated: true,
   },
