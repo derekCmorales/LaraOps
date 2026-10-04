@@ -91,6 +91,20 @@ const LABELS: Record<string, string> = {
   costo_servidor: "costo de servidores",
   costo_total: "costo total",
   óptimo: "óptimo",
+  Q_star: "cantidad económica de pedido (Q*)",
+  orders_per_year: "pedidos por año",
+  time_between_orders_years: "tiempo entre pedidos (años)",
+  time_between_orders_days: "tiempo entre pedidos (días)",
+  avg_inventory: "inventario promedio",
+  TC_ordering: "costo anual de ordenar",
+  TC_holding: "costo anual de mantener",
+  relevant_cost: "costo relevante (ordenar + mantener)",
+  purchase_cost: "costo anual de compra",
+  TC: "costo total",
+  daily_demand: "demanda diaria",
+  lead_time: "tiempo de entrega (días)",
+  reorder_point: "punto de reorden",
+  summary: "resumen",
 };
 
 export function labelKey(key: string): string {

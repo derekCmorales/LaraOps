@@ -53,8 +53,38 @@ function explainPert(result: ModuleResult): string {
   return bits.join(" ");
 }
 
+function explainEoq(result: ModuleResult): string {
+  const m = result.solution.metrics || {};
+  const q = m.Q_star ?? result.solution.variables.Q;
+  const bits: string[] = [];
+  bits.push(
+    `Pedir ${fmtNum(q)} unidades cada vez minimiza la suma del costo de ordenar y el de mantener inventario.`
+  );
+  if (m.TC_ordering != null && m.TC_holding != null) {
+    bits.push(
+      `En Q* ambos costos son iguales (${fmtNum(m.TC_ordering)} cada uno): con pedidos más chicos se ordena más seguido y sube el costo de ordenar; con pedidos más grandes sube el costo de mantener.`
+    );
+  }
+  if (m.purchase_cost != null && m.purchase_cost > 0) {
+    bits.push(
+      `El costo de compra (${fmtNum(m.purchase_cost)}) se paga igual con cualquier tamaño de pedido, por eso no cambia Q*.`
+    );
+  }
+  bits.push(
+    "La curva de costo es plana cerca del óptimo: redondear Q* o pedir en múltiplos de caja casi no cambia el costo."
+  );
+  if (m.reorder_point != null) {
+    bits.push(
+      `Coloca cada pedido cuando el inventario baje a ${fmtNum(m.reorder_point)} unidades: es la demanda que se consume durante el tiempo de entrega.`
+    );
+  }
+  bits.push("El modelo supone demanda constante, sin faltantes y entrega completa de cada pedido.");
+  return bits.join(" ");
+}
+
 function explain(result: ModuleResult): string {
   if (result.module === "pert_cpm") return explainPert(result);
+  if (result.module === "eoq") return explainEoq(result);
   const s = result.status.toLowerCase();
   const z = result.solution.objective_value;
   const warnings = result.warnings || [];

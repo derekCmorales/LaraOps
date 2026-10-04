@@ -10,6 +10,7 @@ import {
 } from "../lib/resultLabels";
 import ChartViews from "./ChartViews";
 import PertResults from "./PertResults";
+import EoqResults, { EoqInventoryChart } from "./EoqResults";
 import Explainer from "./Explainer";
 import IterationsViewer, { type IterationStepView } from "./IterationsViewer";
 import SolutionTable from "./SolutionTable";
@@ -304,6 +305,8 @@ export default function ResultsTabs({ result }: Props) {
         content:
           result.module === "pert_cpm" ? (
             <PertResults result={result} />
+          ) : result.module === "eoq" ? (
+            <EoqResults result={result} />
           ) : isLp ? (
             <LpSolutionPane result={result} />
           ) : (
@@ -323,7 +326,19 @@ export default function ResultsTabs({ result }: Props) {
       list.push({ id: "sensitivity", label: "Sensibilidad", content: <SensitivityPane result={result} /> });
     }
     if (result.graph) {
-      list.push({ id: "graph", label: "Gráfico", content: <ChartViews result={result} /> });
+      list.push({
+        id: "graph",
+        label: result.module === "eoq" ? "Gráficos" : "Gráfico",
+        content:
+          result.module === "eoq" ? (
+            <div className="pert-visuals">
+              <ChartViews result={result} />
+              <EoqInventoryChart result={result} />
+            </div>
+          ) : (
+            <ChartViews result={result} />
+          ),
+      });
     }
     if (result.tables?.length) {
       list.push({

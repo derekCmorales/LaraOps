@@ -58,6 +58,13 @@ function fmt(n: number): string {
   return n.toLocaleString("es-MX", { maximumFractionDigits: 4 });
 }
 
+/** Marcas de eje cortas: sin colas de decimales. */
+function fmtTick(n: number): string {
+  const abs = Math.abs(n);
+  const digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+  return n.toLocaleString("es-MX", { maximumFractionDigits: digits });
+}
+
 function chartTitle(graph: Graph, module: string): string {
   if (graph.title?.trim()) return graph.title;
   const names = (graph.series || []).map((s) => s.name.toLowerCase());
@@ -66,8 +73,8 @@ function chartTitle(graph: Graph, module: string): string {
   }
   if (names.includes("histogram") || names.includes("histograma")) return "Histograma de frecuencias";
   if (names.includes("oc_pa") || names.includes("aoq")) return "Curva OC y AOQ";
+  if (names.includes("ordering") && names.includes("holding")) return "Costos de inventario vs. cantidad de pedido";
   if (names.includes("tr") || names.includes("tc")) return "Costo–volumen–utilidad";
-  if (names.includes("tc") && names.includes("ordering")) return "Costos de inventario vs. cantidad de pedido";
   if (names.includes("actual") || names.includes("serie")) return "Serie histórica y pronósticos";
   if (names.includes("pn")) return "Distribución de probabilidad Pn";
   if (names.includes("demand") || names.includes("production")) return "Plan agregado: demanda y producción";
@@ -284,6 +291,7 @@ function GraphXYView({ result }: { result: ModuleResult }) {
   const xSet = new Set<number>();
   for (const s of graph.series) for (const x of s.x) xSet.add(x);
   const xs = [...xSet].sort((a, b) => a - b);
+  const integerX = xs.every((x) => Number.isInteger(x));
 
   const data = xs.map((x) => {
     const row: Record<string, number | string | null> = { x };
@@ -313,6 +321,13 @@ function GraphXYView({ result }: { result: ModuleResult }) {
   );
   const qStar = result.solution.metrics.Q_star ?? result.solution.variables.Q;
   const bep = result.solution.metrics.BEP_units ?? result.solution.variables.BEP_units;
+  // EOQ: punto mínimo sobre la curva de costo relevante.
+  const minRow =
+    result.module === "eoq" && qStar != null
+      ? data.find((row) => Math.abs(Number(row.x) - qStar) < 1e-9)
+      : undefined;
+  const minKey = labelOf(graph.series[0].name);
+  const minY = minRow ? minRow[minKey] : null;
 
   const Chart = bar ? BarChart : LineChart;
 
@@ -323,13 +338,18 @@ function GraphXYView({ result }: { result: ModuleResult }) {
           <CartesianGrid stroke={C.grid} strokeDasharray="3 3" />
           <XAxis
             dataKey="x"
+            type={bar ? "category" : "number"}
+            domain={bar ? undefined : ["dataMin", "dataMax"]}
+            allowDecimals={!integerX}
+            tickFormatter={(v: number | string) => (typeof v === "number" ? fmtTick(v) : String(v))}
             tick={{ fontSize: 11, fill: C.muted }}
             label={{ value: xLabel, position: "insideBottom", offset: -16, fill: C.ink, fontSize: 12 }}
           />
           <YAxis
             tick={{ fontSize: 11, fill: C.muted }}
+            tickFormatter={(v: number) => fmtTick(v)}
             label={{ value: yLabel, angle: -90, position: "insideLeft", fill: C.ink, fontSize: 12 }}
-            width={56}
+            width={64}
           />
           <Tooltip
             contentStyle={{
@@ -342,12 +362,12 @@ function GraphXYView({ result }: { result: ModuleResult }) {
               typeof value === "number" ? fmt(value) : value,
               name,
             ]}
-            labelFormatter={(label) => `${xLabel} = ${label}`}
+            labelFormatter={(label) => `${xLabel} = ${typeof label === "number" ? fmt(label) : label}`}
           />
-          <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
+          <Legend verticalAlign="top" wrapperStyle={{ fontSize: 12, paddingBottom: 8 }} />
           {seriesMeta.map((s) =>
             bar && s.primary ? (
-              <Bar key={s.key} dataKey={s.key} fill={s.color} name={s.key} maxBarSize={36} />
+              <Bar key={s.key} dataKey={s.key} fill={s.color} name={s.key} maxBarSize={36} isAnimationActive={false} />
             ) : (
               <Line
                 key={s.key}
@@ -360,6 +380,7 @@ function GraphXYView({ result }: { result: ModuleResult }) {
                 dot={!s.dashed && (graph.series!.find((x) => labelOf(x.name) === s.key)?.x.length ?? 0) <= 16}
                 connectNulls
                 activeDot={{ r: 4 }}
+                isAnimationActive={false}
               />
             )
           )}
@@ -368,7 +389,18 @@ function GraphXYView({ result }: { result: ModuleResult }) {
               x={qStar}
               stroke={C.pivot}
               strokeDasharray="4 3"
-              label={{ value: `Q* = ${fmt(qStar)}`, fill: C.pivot, fontSize: 11, position: "top" }}
+              label={{ value: `Q* = ${fmt(qStar)}`, fill: C.pivot, fontSize: 11, position: "insideTopRight" }}
+            />
+          )}
+          {minRow && typeof minY === "number" && (
+            <ReferenceDot
+              x={Number(minRow.x)}
+              y={minY}
+              r={6}
+              fill={C.pivot}
+              stroke={C.paper}
+              strokeWidth={2}
+              label={{ value: `Mínimo ${fmt(minY)}`, position: "bottom", fill: C.pivot, fontSize: 11 }}
             />
           )}
           {bep != null && Number.isFinite(bep) && (

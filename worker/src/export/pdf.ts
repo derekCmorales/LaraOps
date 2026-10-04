@@ -6,6 +6,12 @@ function safe(text: string): string {
   return text.replace(/[^\x09\x0A\x0D\x20-\x7EÀ-ÿ]/g, "?");
 }
 
+/** Números legibles en el reporte: hasta 4 decimales, sin colas de punto flotante. */
+function num(v: unknown): string {
+  if (typeof v === "number" && Number.isFinite(v)) return String(Number(v.toFixed(4)));
+  return v == null ? "" : String(v);
+}
+
 export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -59,14 +65,14 @@ export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Arra
   } else if (Object.keys(result.solution.variables).length) {
     draw("Variables", true);
     for (const [name, value] of Object.entries(result.solution.variables).slice(0, 40)) {
-      draw(`  ${name} = ${value}`);
+      draw(`  ${name} = ${num(value)}`);
     }
   }
 
   if (result.solution.metrics && Object.keys(result.solution.metrics).length) {
     draw("Métricas", true);
     for (const [name, value] of Object.entries(result.solution.metrics)) {
-      draw(`  ${labelKey(name)} = ${value}`);
+      draw(`  ${labelKey(name)} = ${num(value)}`);
     }
   }
 
@@ -75,7 +81,7 @@ export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Arra
       heading(`Tabla: ${labelTableName(table.name)}`);
       draw(labelColumns(table.columns).join(" | "), true, 9);
       for (const row of table.rows.slice(0, 40)) {
-        draw(row.map((v) => (v == null ? "" : String(v))).join(" | "), false, 8);
+        draw(row.map(num).join(" | "), false, 8);
       }
       if (table.rows.length > 40) draw(`... (${table.rows.length - 40} filas más)`);
     }
