@@ -6,6 +6,8 @@ import { solve as solveLp } from "./lp/solver";
 import { solve as solveTransport } from "./transport/solver";
 import { solve as solveNetworks } from "./networks/solver";
 import { solve as solvePert } from "./pert_cpm/solver";
+import { solve as solveMonteCarlo } from "./monte_carlo/solver";
+import { solve as solveQueuingSimulation } from "./queuing_simulation/solver";
 
 register("assignment", solveAssignment);
 register("eoq", solveEoq);
@@ -14,3 +16,5 @@ register("lp", solveLp);
 register("transport", solveTransport);
 register("networks", solveNetworks);
 register("pert_cpm", solvePert);
+register("monte_carlo", solveMonteCarlo);
+register("queuing_simulation", solveQueuingSimulation);

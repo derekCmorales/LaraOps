@@ -7,6 +7,8 @@ import AssignmentPage from "./pages/AssignmentPage";
 import EoqPage from "./pages/EoqPage";
 import LpPage from "./pages/LpPage";
 import PertCpmPage from "./pages/PertCpmPage";
+import MonteCarloPage from "./pages/MonteCarloPage";
+import QssPage from "./pages/QssPage";
 import QueuesPage from "./pages/QueuesPage";
 import {
   AggregatePage,
@@ -26,7 +28,6 @@ import {
   NetworksPage,
   NlpPage,
   QpPage,
-  QssPage,
   QualityPage,
   StatisticsPage,
 } from "./pages/PhaseFGPages";
@@ -71,7 +72,7 @@ function Home() {
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, Dijkstra, M/M/1, ruta crítica)"
+            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, Markov, Monte Carlo, ruta crítica)"
             aria-label="Buscar módulo"
           />
         </label>
@@ -157,6 +158,7 @@ export default function App() {
           <Route path="/asa" element={<AsaPage />} />
           <Route path="/queues" element={<QueuesPage />} />
           <Route path="/qss" element={<QssPage />} />
+          <Route path="/monte-carlo" element={<MonteCarloPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/forecasting" element={<ForecastingPage />} />
           <Route path="/decision" element={<DecisionPage />} />
