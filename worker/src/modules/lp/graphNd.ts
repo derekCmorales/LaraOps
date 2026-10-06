@@ -9,11 +9,13 @@ const EPS = 1e-9;
 export function buildLpGraph(
   req: LPRequest,
   xStar: Record<string, number>,
-  zStar: number,
+  zStar: number | null,
 ): { graph: GraphXY | null; warnings: string[] } {
   const names = collectVarNames(req);
   const warnings: string[] = [];
   if (names.length < 2) return { graph: null, warnings };
+  // Sin óptimo (infactible o no acotado) solo se dibuja el caso de dos variables.
+  if (zStar == null) return { graph: names.length === 2 ? build2dGraph(req, xStar, null) : null, warnings };
   const picked = freeNames(req, names);
   warnings.push(...picked.warnings);
   if (picked.free.length < 2) return { graph: null, warnings };

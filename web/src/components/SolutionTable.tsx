@@ -29,7 +29,7 @@ export default function SolutionTable({
       <thead>
         <tr>
           {columns.map((c, j) => (
-            <th key={c} scope="col" className={textColumns.includes(j) ? "col-text" : undefined}>
+            <th key={`${c}-${j}`} scope="col" className={textColumns.includes(j) ? "col-text" : undefined}>
               {c}
             </th>
           ))}

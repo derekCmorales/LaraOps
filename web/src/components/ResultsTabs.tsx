@@ -20,6 +20,7 @@ import IterationsViewer, { type IterationStepView } from "./IterationsViewer";
 import SolutionTable from "./SolutionTable";
 import StatusBand from "./StatusBand";
 import JsonTable from "./JsonTable";
+import { HundredPercentRule, LpAlgebraicPane, LpDualPane, LpIterations, LpSolutionPane } from "./LpResults";
 
 type Props = { result: ModuleResult };
 
@@ -34,11 +35,6 @@ function vertexTextColumns(columns: string[]): number[] {
     .map((column, index) => (column === "origen" || column === "optimo" ? index : -1))
     .filter((index) => index >= 0);
   return idx.length ? idx : [3, 4];
-}
-
-function vertexValueColumns(columns: string[]): string[] {
-  const cut = columns.findIndex((column) => column === "origen" || column === "optimo");
-  return columns.slice(0, cut < 0 ? columns.length : cut);
 }
 
 type SensitivityData = {
@@ -106,119 +102,6 @@ function SensitivityPane({ result }: Props) {
   );
 }
 
-function LpSolutionPane({ result }: Props) {
-  const sens = result.sensitivity as SensitivityData | null;
-  const rcByVar = new Map(
-    (sens?.reduced_costs ?? []).map((r) => [String(r.variable), Number(r.reduced_cost ?? 0)]),
-  );
-  const coefByVar = new Map(
-    (sens?.objective_ranges ?? []).map((r) => [String(r.variable), Number(r.coeff ?? 0)]),
-  );
-
-  const varRows = Object.entries(result.solution.variables).map(([k, v]) => [
-    translateVariable(k),
-    v,
-    coefByVar.get(k) ?? "—",
-    rcByVar.has(k) ? rcByVar.get(k)! : "—",
-  ]);
-
-  const constraintSummary =
-    sens?.constraint_analysis?.map((r) => [
-      r.constraint_id,
-      r.lhs,
-      r.sense,
-      r.rhs,
-      r.slack_or_surplus,
-      r.shadow_price,
-    ]) ?? [];
-
-  const activeConstraintRows =
-    sens?.constraint_analysis
-      ?.map((r, i) => (Math.abs(Number(r.slack_or_surplus ?? 1)) < 1e-6 ? i : -1))
-      .filter((i) => i >= 0) ?? [];
-
-  const multipleOptima = result.warnings?.some((w) =>
-    w.toLowerCase().includes("óptimos múltiples"),
-  );
-  const optimalVertices =
-    result.tables
-      ?.find((t) => t.name === "vertices_feasible")
-      ?.rows.filter((row) => {
-        const optCol = row[row.length - 1];
-        return String(optCol).toLowerCase() in { sí: 1, si: 1, yes: 1, "1": 1 };
-      }) ?? [];
-
-  return (
-    <div>
-      {result.warnings?.length > 0 && (
-        <ul className="warn-list">
-          {result.warnings.map((w) => (
-            <li key={w}>{translateWarning(w)}</li>
-          ))}
-        </ul>
-      )}
-      {varRows.length > 0 ? (
-        <SolutionTable
-          caption="Variables"
-          columns={["Variable", "Valor", "Coef. objetivo", "Costo reducido"]}
-          rows={varRows}
-          textColumns={[0]}
-        />
-      ) : (
-        <p className="field-hint">No hay variables en este resultado.</p>
-      )}
-      {constraintSummary.length > 0 && (
-        <SolutionTable
-          caption="Restricciones en el óptimo"
-          columns={labelColumns([
-            "constraint_id",
-            "lhs",
-            "sense",
-            "rhs",
-            "slack_or_surplus",
-            "shadow_price",
-          ])}
-          rows={constraintSummary as (string | number)[][]}
-          textColumns={[0]}
-          activeRowIndexes={activeConstraintRows}
-        />
-      )}
-      {multipleOptima && optimalVertices.length > 1 && (
-        <SolutionTable
-          caption="Vértices óptimos alternativos"
-          columns={labelColumns(
-            vertexValueColumns(
-              result.tables?.find((t) => t.name === "vertices_feasible")?.columns ?? ["x", "y", "Z"],
-            ),
-          )}
-          rows={
-            optimalVertices.map((row) =>
-              row.slice(
-                0,
-                vertexValueColumns(
-                  result.tables?.find((t) => t.name === "vertices_feasible")?.columns ?? [],
-                ).length,
-              ),
-            ) as (string | number)[][]
-          }
-        />
-      )}
-      {result.tables
-        ?.filter((t) => t.name === "vertices_feasible")
-        .map((t) => (
-          <SolutionTable
-            key={t.name}
-            caption={tableName(t.name)}
-            columns={labelColumns(t.columns)}
-            rows={labelTableRows(t.rows) as (string | number | boolean | null)[][]}
-            textColumns={vertexTextColumns(t.columns)}
-          />
-        ))}
-      <Explainer result={result} />
-    </div>
-  );
-}
-
 function metricsCopyVariables(result: ModuleResult): boolean {
   const vars = result.solution.variables;
   const metrics = result.solution.metrics;
@@ -228,11 +111,20 @@ function metricsCopyVariables(result: ModuleResult): boolean {
   return metricKeys.every((k) => vars[k] === metrics[k]);
 }
 
-const NETWORK_TABLES = new Set(["ruta", "aristas_mst", "flows", "min_cut", "recorrido"]);
+const NETWORK_TABLES = new Set([
+  "ruta",
+  "distancias",
+  "aristas_mst",
+  "flows",
+  "balance_nodos",
+  "oferta_sin_enviar",
+  "min_cut",
+  "recorrido",
+]);
 
 function nodeTextColumns(columns: string[]): number[] {
   return columns
-    .map((column, index) => (/^(origen|destino|nodo)$/i.test(column) ? index : -1))
+    .map((column, index) => (/^(origen|destino|nodo|tipo|llega_desde|ruta_desde_origen)$/i.test(column) ? index : -1))
     .filter((index) => index >= 0);
 }
 
@@ -340,6 +232,8 @@ export default function ResultsTabs({ result }: Props) {
         content:
           result.module === "assignment" ? (
             <HungarianSteps result={result} />
+          ) : isLp ? (
+            <LpIterations result={result} />
           ) : isTransport ? (
             <TransportIterations result={result} />
           ) : (
@@ -351,8 +245,23 @@ export default function ResultsTabs({ result }: Props) {
       list.push({
         id: "sensitivity",
         label: "Sensibilidad",
-        content: isTransport ? <TransportSensitivity result={result} /> : <SensitivityPane result={result} />,
+        content: isTransport ? (
+          <TransportSensitivity result={result} />
+        ) : isLp ? (
+          <div>
+            <SensitivityPane result={result} />
+            <HundredPercentRule result={result} />
+          </div>
+        ) : (
+          <SensitivityPane result={result} />
+        ),
       });
+    }
+    if (isLp && result.tables?.some((t) => t.name === "dual_modelo")) {
+      list.push({ id: "dual", label: "Dual", content: <LpDualPane result={result} /> });
+    }
+    if (isLp && result.tables?.some((t) => t.name === "soluciones_basicas")) {
+      list.push({ id: "algebraic", label: "Método algebraico", content: <LpAlgebraicPane result={result} /> });
     }
     if (isQueues) {
       list.push({ id: "formulas", label: "Fórmulas", content: <QueuesFormulas result={result} /> });
@@ -379,8 +288,8 @@ export default function ResultsTabs({ result }: Props) {
           ),
       });
     }
-    // Transporte y colas ya muestran sus tablas en sus propias vistas; no se repiten.
-    if (result.tables?.length && !isTransport && !isQueues) {
+    // Transporte, PL y colas ya muestran sus tablas en sus propias vistas; no se repiten.
+    if (result.tables?.length && !isTransport && !isLp && !isQueues) {
       list.push({
         id: "tables",
         label: "Tablas",

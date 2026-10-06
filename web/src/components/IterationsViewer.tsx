@@ -217,12 +217,15 @@ export default function IterationsViewer({ steps }: Props) {
           {translateTitle(step.title)}
         </p>
         {step.tableau ? (
-          <Tableau
-            table={step.tableau}
-            flash={flash}
-            pivot={pivot}
-            caption={`Tabla — iteración ${idx + 1}`}
-          />
+          <>
+            <Tableau
+              table={step.tableau}
+              flash={flash}
+              pivot={pivot}
+              caption={`Tabla — iteración ${idx + 1}`}
+            />
+            {Object.keys(meta).some((k) => !META_SKIP.has(k)) ? <MetaPanel meta={meta} /> : null}
+          </>
         ) : (
           <MetaPanel meta={meta} />
         )}

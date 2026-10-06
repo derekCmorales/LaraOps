@@ -3980,3 +3980,242 @@ textarea {
     flex: 1 1 auto;
   }
 }
+
+/* ——— Programación lineal: simplex tabular, dual, regla del 100 % ——— */
+.lp-method {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--space) * 3);
+}
+
+.lp-method-label {
+  font-size: var(--text-label);
+  color: var(--ink-600);
+}
+
+.lp-iter {
+  display: grid;
+  gap: calc(var(--space) * 3);
+}
+
+.lp-stdform summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-label);
+  color: var(--ink-600);
+}
+
+.lp-stdform[open] summary {
+  margin-bottom: calc(var(--space) * 2);
+}
+
+.lp-iter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space) * 3);
+}
+
+.lp-iter-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space) * 1.5);
+}
+
+.lp-iter-step {
+  border: var(--border);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink-600);
+  font-size: var(--text-caption);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.lp-iter-step:hover {
+  border-color: var(--ink-400);
+  color: var(--ink-900);
+}
+
+.lp-iter-step.is-on {
+  background: var(--ink-900);
+  border-color: var(--ink-900);
+  color: var(--paper-raised);
+}
+
+.lp-iter-title {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+
+.lp-ops {
+  border-left: 3px solid var(--ink-200);
+  padding-left: calc(var(--space) * 3);
+}
+
+.lp-ops ul {
+  margin: calc(var(--space) * 1) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--space) * 1.5) calc(var(--space) * 4);
+}
+
+.lp-ops code {
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+}
+
+.lp-tableau-wrap {
+  overflow-x: auto;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+}
+
+.lp-tableau {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--font-data);
+  font-size: var(--text-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-tableau th,
+.lp-tableau td {
+  padding: 6px 10px;
+  text-align: right;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ink-100);
+}
+
+.lp-tableau thead th {
+  font-family: var(--font-ui);
+  font-size: var(--text-label);
+  color: var(--ink-600);
+  background: var(--muted-fill);
+  border-bottom: var(--border);
+}
+
+.lp-tableau .lp-tab-name {
+  text-align: left;
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+
+.lp-tableau .lp-tab-rhs {
+  border-left: var(--border);
+  font-weight: 600;
+}
+
+.lp-tableau .lp-tab-ratio {
+  color: var(--ink-600);
+}
+
+.lp-tableau .lp-row0 > * {
+  border-bottom: 2px solid var(--ink-400);
+  background: #f9fbfe;
+}
+
+.lp-tableau .is-enter-col {
+  background: rgba(10, 107, 154, 0.08);
+}
+
+.lp-tableau .is-leave-row > * {
+  background: rgba(196, 22, 107, 0.06);
+}
+
+.lp-tableau td.is-pivot {
+  outline: 2px solid var(--pivot);
+  outline-offset: -2px;
+  color: var(--pivot);
+  font-weight: 700;
+}
+
+.lp-tab-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  background: var(--basic);
+  color: #fff;
+  vertical-align: 1px;
+}
+
+.is-leave-row .lp-tab-tag {
+  background: var(--pivot);
+}
+
+.lp-why {
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+  padding: calc(var(--space) * 3) calc(var(--space) * 4);
+}
+
+.lp-why p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.lp-why p + p {
+  margin-top: calc(var(--space) * 2);
+}
+
+.lp-iter-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space) * 3);
+}
+
+.lp-rule {
+  margin-top: calc(var(--space) * 6);
+  display: grid;
+  gap: calc(var(--space) * 3);
+}
+
+.lp-rule .eoq-toggle {
+  justify-self: start;
+}
+
+.lp-rule-input {
+  width: 7.5rem;
+  padding: 4px 6px;
+  border: var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-data);
+  text-align: right;
+}
+
+.lp-rule-verdict {
+  margin: 0;
+  padding: calc(var(--space) * 3);
+  border-radius: var(--radius-md);
+  border: 1px solid;
+}
+
+.lp-rule-verdict.is-ok {
+  border-color: var(--basic);
+  background: rgba(10, 107, 154, 0.06);
+}
+
+.lp-rule-verdict.is-bad {
+  border-color: var(--warn);
+  background: rgba(148, 88, 0, 0.07);
+}
+
+.lp-dual {
+  display: grid;
+  gap: calc(var(--space) * 3);
+}

@@ -22,11 +22,16 @@ const SYMBOLS: Record<string, string> = {
   "₀": "0",
   "ⁿ": "^n",
   "√": "raiz",
+  "←": "<-",
+  "→": "->",
+  "∩": "y",
+  "⁺": "+",
+  "⁻": "-",
 };
 
 function safe(text: string): string {
   return text
-    .replace(/[λμρσπΣ∫≤≥⇔∞−–—…₀ⁿ√]/g, (ch) => SYMBOLS[ch] ?? ch)
+    .replace(/[λμρσπΣ∫≤≥⇔∞−–—…₀ⁿ√←→∩⁺⁻]/g, (ch) => SYMBOLS[ch] ?? ch)
     .replace(/[^\x09\x0A\x0D\x20-\x7EÀ-ÿ\xA0-\xBF×÷]/g, "?");
 }
 
@@ -128,7 +133,7 @@ export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Arra
     if (last.tableau?.length) {
       draw("Tableau final (óptimo)", true, 9);
       for (const row of last.tableau.slice(0, 20)) {
-        draw(row.map((v) => (v == null ? "" : String(v))).join(" | "), false, 8);
+        draw(row.map(num).join(" | "), false, 8);
       }
     }
   }

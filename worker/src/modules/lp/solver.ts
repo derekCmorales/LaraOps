@@ -1,214 +1,356 @@
-import { columns, invert, pinv, matvec, vecmat, cloneMat } from "../../linalg";
-import type { IterationStep, ModuleResult, SensitivityBlock } from "../../schema";
+import { SolverError } from "../../errors";
+import type { IterationStep, ModuleResult, NamedTable, SensitivityBlock } from "../../schema";
 import { okResult } from "../../schema";
+import { basicSolutionsTable } from "./basicSolutions";
+import { buildDual, linearText } from "./dual";
 import { verticesNamedTable } from "./graph2d";
 import { buildLpGraph } from "./graphNd";
+import { cell, fmtM, fmtPlain, hasM, snap } from "./mnum";
 import { computeSensitivity } from "./sensitivity";
-import { collectVarNames, parseLpRequest, type LPRequest } from "./types";
-
-type SimplexStatus = "optimal" | "unbounded";
+import {
+  alternativeOptimum,
+  finalBasisWithoutArtificials,
+  runSimplex,
+  solutionOf,
+  type ColKind,
+  type EngineOutcome,
+  type Snapshot,
+  type StdForm,
+} from "./simplex";
+import { collectVarNames, parseLpRequest, type LPConstraint, type LPRequest } from "./types";
 
 export function solve(body: unknown): ModuleResult {
   return solveLp(parseLpRequest(body));
 }
 
-export function solveLp(req: LPRequest): ModuleResult {
-  const varNames = collectVarNames(req);
+/** Convierte las cotas de variables en restricciones explícitas. */
+function applyBounds(req: LPRequest, varNames: string[]): LPRequest {
+  if (!req.bounds) return req;
+  const extra: LPConstraint[] = [];
+  for (const [name, [lo, hi]] of Object.entries(req.bounds)) {
+    if (!varNames.includes(name)) continue;
+    if (lo == null || lo < 0) {
+      throw new SolverError(
+        `La variable ${name} tiene cota inferior negativa o libre. Este módulo trabaja con variables no negativas: sustituye ${name} = ${name}⁺ − ${name}⁻ con ambas ≥ 0.`,
+      );
+    }
+    if (lo > 0) extra.push({ id: `cota_inf_${name}`, coeffs: { [name]: 1 }, sense: ">=", rhs: lo });
+    if (hi != null) {
+      if (hi < lo) throw new SolverError(`La cota superior de ${name} es menor que la inferior.`);
+      extra.push({ id: `cota_sup_${name}`, coeffs: { [name]: 1 }, sense: "<=", rhs: hi });
+    }
+  }
+  return { ...req, constraints: [...req.constraints, ...extra], bounds: null };
+}
+
+function uniqueName(base: string, taken: Set<string>): string {
+  let name = base;
+  while (taken.has(name)) name = `${name}'`;
+  taken.add(name);
+  return name;
+}
+
+/** Forma estándar: LD >= 0, holguras (s), excesos (e) y artificiales (a). */
+function buildStdForm(constraints: LPConstraint[], varNames: string[]): StdForm {
   const n = varNames.length;
-  const maximize = req.sense === "max";
-  const cUser = varNames.map((v) => req.objective[v] ?? 0);
-  const cObj = maximize ? cUser.slice() : cUser.map((x) => -x);
-
-  let constraintIds = req.constraints.map((c) => c.id);
+  const taken = new Set(varNames);
+  const colNames = [...varNames];
+  const kinds: ColKind[] = varNames.map(() => "decision");
+  const colRow: number[] = varNames.map(() => -1);
+  const m = constraints.length;
   const rows: number[][] = [];
-  const rhsList: number[] = [];
+  const b: number[] = [];
+  const flipped: boolean[] = [];
   const senses: string[] = [];
-
-  for (const cons of req.constraints) {
-    let row = varNames.map((v) => cons.coeffs[v] ?? 0);
-    let bVal = cons.rhs;
-    let sense = cons.sense;
-    if (bVal < 0) {
-      row = row.map((x) => -x);
-      bVal = -bVal;
+  constraints.forEach((c) => {
+    let row = varNames.map((v) => c.coeffs[v] ?? 0);
+    let rhs = c.rhs;
+    let sense = c.sense;
+    const flip = rhs < 0;
+    if (flip) {
+      row = row.map((x) => (x === 0 ? 0 : -x));
+      rhs = -rhs;
       if (sense === "<=") sense = ">=";
       else if (sense === ">=") sense = "<=";
     }
     rows.push(row);
-    rhsList.push(bVal);
+    b.push(rhs);
+    flipped.push(flip);
     senses.push(sense);
-  }
-
-  const warnings: string[] = [];
-  const iterations: IterationStep[] = [];
-
-  if (!rows.length) {
-    if (cObj.some((x) => Math.abs(x) > 1e-12)) {
-      return resultOf(req, "unbounded", Object.fromEntries(varNames.map((v) => [v, 0])), null, [], null, warnings);
-    }
-    return resultOf(req, "optimal", Object.fromEntries(varNames.map((v) => [v, 0])), 0, [], null, warnings);
-  }
-
-  const ACore = rows.map((r) => r.slice());
-  let bOriginal = rhsList.slice();
-  const m0 = rows.length;
-  const extraCols: number[][] = [];
-  let colNames = [...varNames];
-  const basic = Array(m0).fill(-1);
-  const artIndices: number[] = [];
-
+  });
+  const extra: number[][] = []; // columnas extra (cada una de largo m)
+  const initialBasis: number[] = Array(m).fill(-1);
+  const addCol = (name: string, kind: ColKind, row: number, value: number) => {
+    const col = Array(m).fill(0);
+    col[row] = value;
+    extra.push(col);
+    colNames.push(uniqueName(name, taken));
+    kinds.push(kind);
+    colRow.push(row);
+    return colNames.length - 1;
+  };
   senses.forEach((sense, i) => {
-    if (sense === "<=") {
-      const col = Array(m0).fill(0);
-      col[i] = 1;
-      extraCols.push(col);
-      colNames.push(`s_${constraintIds[i]}`);
-      basic[i] = n + extraCols.length - 1;
-    } else if (sense === ">=") {
-      const surplus = Array(m0).fill(0);
-      surplus[i] = -1;
-      extraCols.push(surplus);
-      colNames.push(`e_${constraintIds[i]}`);
-      const art = Array(m0).fill(0);
-      art[i] = 1;
-      extraCols.push(art);
-      colNames.push(`a_${constraintIds[i]}`);
-      basic[i] = n + extraCols.length - 1;
-      artIndices.push(basic[i]);
-    } else {
-      const art = Array(m0).fill(0);
-      art[i] = 1;
-      extraCols.push(art);
-      colNames.push(`a_${constraintIds[i]}`);
-      basic[i] = n + extraCols.length - 1;
-      artIndices.push(basic[i]);
-    }
+    if (sense === "<=") initialBasis[i] = addCol(`s${i + 1}`, "slack", i, 1);
+    else if (sense === ">=") {
+      addCol(`e${i + 1}`, "surplus", i, -1);
+      initialBasis[i] = addCol(`a${i + 1}`, "artificial", i, 1);
+    } else initialBasis[i] = addCol(`a${i + 1}`, "artificial", i, 1);
   });
+  const A = rows.map((row, i) => [...row, ...extra.map((col) => col[i])]);
+  return { colNames, kinds, colRow, A, b, initialBasis, flipped, nDecision: n };
+}
 
-  let AWork = extraCols.length ? hstack(ACore, extraCols) : cloneMat(ACore);
-  let b = bOriginal.slice();
-  const totalCols = AWork[0].length;
-  let AStd = cloneMat(AWork);
-
-  let cPhase2: number[];
-  if (artIndices.length) {
-    const cPhase1 = Array(totalCols).fill(0);
-    for (const ai of artIndices) cPhase1[ai] = -1;
-    const p1 = simplexLoop(AWork, b, cPhase1, basic, colNames, "Fase I", 0);
-    AWork = p1.A;
-    b = p1.b;
-    if (req.include_iterations) iterations.push(...p1.iterations);
-    let artSum = 0;
-    for (const ai of artIndices) {
-      const idx = basic.indexOf(ai);
-      if (idx >= 0) artSum += b[idx];
-    }
-    if (artSum > 1e-7) {
-      return resultOf(
-        req,
-        "infeasible",
-        Object.fromEntries(varNames.map((v) => [v, 0])),
-        null,
-        req.include_iterations ? iterations : [],
-        null,
-        warnings,
-      );
-    }
-    const artSet = new Set(artIndices);
-    const rowsBefore = AWork.length;
-    const ejected = ejectArtificials(AWork, b, basic, artSet);
-    AWork = ejected.A;
-    b = ejected.b;
-    if (ejected.keepRows.length < rowsBefore) {
-      AStd = ejected.keepRows.map((i) => AStd[i]);
-      bOriginal = ejected.keepRows.map((i) => bOriginal[i]);
-      constraintIds = ejected.keepRows.map((i) => constraintIds[i]);
-      warnings.push("Restricciones redundantes detectadas y eliminadas tras la Fase I");
-    }
-    const keep = [...Array(AWork[0].length).keys()].filter((j) => !artSet.has(j));
-    const oldToNew = new Map(keep.map((old, neu) => [old, neu]));
-    AWork = AWork.map((row) => keep.map((j) => row[j]));
-    AStd = AStd.map((row) => keep.map((j) => row[j]));
-    colNames = keep.map((j) => colNames[j]);
-    const remapped = basic.map((bi) => oldToNew.get(bi)).filter((v): v is number => v !== undefined);
-    basic.length = 0;
-    basic.push(...remapped);
-    cPhase2 = Array(keep.length).fill(0);
-    for (const [jOld, jNew] of oldToNew) {
-      if (jOld < n) cPhase2[jNew] = cObj[jOld];
-    }
-  } else {
-    cPhase2 = Array(totalCols).fill(0);
-    for (let j = 0; j < n; j++) cPhase2[j] = cObj[j];
+function standardFormTable(
+  req: LPRequest,
+  form: StdForm,
+  varNames: string[],
+  costs: number[],
+  method: "big_m" | "two_phase",
+): NamedTable {
+  const maximize = req.sense === "max";
+  const hasArt = form.kinds.includes("artificial");
+  const objNames = [...varNames];
+  const objCoefs = [...costs];
+  let objText = `${maximize ? "Max" : "Min"} Z = ${linearText(objCoefs, objNames)}`;
+  if (hasArt && method === "big_m") {
+    const arts = form.colNames.filter((_, j) => form.kinds[j] === "artificial");
+    objText += arts.map((a) => ` ${maximize ? "-" : "+"} M${a}`).join("");
   }
-
-  const p2 = simplexLoop(AWork, b, cPhase2, basic, colNames, "Fase II", iterations.length);
-  AWork = p2.A;
-  b = p2.b;
-  if (req.include_iterations) iterations.push(...p2.iterations);
-  if (p2.status === "unbounded") {
-    return resultOf(
-      req,
-      "unbounded",
-      Object.fromEntries(varNames.map((v) => [v, 0])),
-      null,
-      req.include_iterations ? iterations : [],
-      null,
-      warnings,
-    );
-  }
-
-  const xFull = Array(colNames.length).fill(0);
-  basic.forEach((col, row) => {
-    xFull[col] = b[row];
+  const rows: (string | number)[][] = [["Función objetivo", objText, ""]];
+  req.constraints.forEach((c, i) => {
+    const original = `${linearText(varNames.map((v) => c.coeffs[v] ?? 0), varNames)} ${c.sense === "<=" ? "≤" : c.sense === ">=" ? "≥" : "="} ${fmtPlain(c.rhs)}`;
+    const coeffs = form.A[i];
+    const std = `${linearText(coeffs, form.colNames)} = ${fmtPlain(form.b[i])}`;
+    const added = form.colNames
+      .map((name, j) => (form.colRow[j] === i ? `${name} (${kindLabel(form.kinds[j])})` : ""))
+      .filter(Boolean)
+      .join(", ");
+    const note = form.flipped[i] ? `LD negativo: se multiplicó por -1. ${added}` : added;
+    rows.push([`${c.id}: ${original}`, std, note]);
   });
-  const variables = Object.fromEntries(varNames.map((v, i) => [v, xFull[i] ?? 0]));
-  const zInternal = cPhase2.reduce((s, c, j) => s + c * xFull[j], 0);
-  const zUser = maximize ? zInternal : -zInternal;
-
-  for (let row = 0; row < basic.length; row++) {
-    if (Math.abs(b[row]) < 1e-9 && basic[row] < n) {
-      warnings.push(`Degeneración: variable básica ${colNames[basic[row]]} = 0`);
-      break;
-    }
+  rows.push([
+    "No negatividad",
+    `${form.colNames.join(", ")} ≥ 0`,
+    "",
+  ]);
+  if (hasArt && method === "two_phase") {
+    const arts = form.colNames.filter((_, j) => form.kinds[j] === "artificial");
+    rows.splice(1, 0, ["Fase I", `Min W = ${arts.join(" + ")}`, "Al llegar a W = 0 se pasa a la Fase II con Z original."]);
   }
+  return { name: "forma_estandar", columns: ["modelo", "forma_estandar", "variables_agregadas"], rows };
+}
 
-  try {
-    const BInv = invert(columns(AStd, basic));
-    const y = vecmat(
-      basic.map((j) => cPhase2[j]),
-      BInv,
-    );
-    const reduced = cPhase2.map((cj, j) => cj - y.reduce((s, yi, i) => s + yi * AStd[i][j], 0));
-    const nonbasic = [...Array(colNames.length).keys()].filter((j) => !basic.includes(j));
-    const alt = nonbasic.filter((j) => j < n && Math.abs(reduced[j]) < 1e-8).map((j) => colNames[j]);
-    if (alt.length) {
-      warnings.push(`Óptimos múltiples: variables no básicas con costo reducido ≈ 0: ${alt.join(", ")}`);
-    }
-  } catch {
-    /* ignore */
-  }
+function kindLabel(kind: ColKind): string {
+  if (kind === "slack") return "holgura";
+  if (kind === "surplus") return "exceso";
+  if (kind === "artificial") return "artificial";
+  return "decisión";
+}
 
-  let sensitivity: SensitivityBlock | null = null;
-  if (req.include_sensitivity) {
-    sensitivity = computeSensitivity({
-      A: AStd,
-      bOriginal,
-      cInternal: cPhase2,
-      basic: [...basic],
-      varNames,
-      constraintIds,
-      constraints: req.constraints,
-      variables,
-      nDecision: n,
-      maximize,
-      cUser,
+function stepOf(s: Snapshot, index: number): IterationStep {
+  const ratioCol = !!s.ratios;
+  const header: (number | string)[] = ["Básica", s.objectiveLabel, ...s.colNames, "LD"];
+  if (ratioCol) header.push("Razón");
+  const row0: (number | string)[] = [s.objectiveLabel, 1, ...s.row0.map(cell), cell(s.z)];
+  if (ratioCol) row0.push("");
+  const body = s.rows.map((r, i) => {
+    const line: (number | string)[] = [s.basicNames[i], 0, ...r, s.rhs[i]];
+    if (ratioCol) line.push(s.ratios![i] == null ? "—" : s.ratios![i]!);
+    return line;
+  });
+  return {
+    index,
+    method: "simplex",
+    title: s.title,
+    tableau: [header, row0, ...body],
+    meta: {
+      phase: s.phase,
+      kind: s.kind,
+      sense: s.sense,
+      objective_label: s.objectiveLabel,
+      row_ids: s.rowIds,
+      row0: s.row0,
+      z: hasM(s.z) ? fmtM(s.z) : snap(s.z.a),
+      z_m: s.z,
+      ratios: s.ratios ?? null,
+      enter: s.entering ?? null,
+      leave: s.leaving ?? null,
+      pivot: s.pivot
+        ? { row: s.pivot.row + 2, col: s.pivot.col + 2, value: s.pivot.value, enter: s.entering, leave: s.leaving, tableau_row: s.pivot.row, tableau_col: s.pivot.col }
+        : null,
+      entering_ties: s.enteringTies?.length ? s.enteringTies : null,
+      leaving_ties: s.leavingTies?.length ? s.leavingTies : null,
+      rule: s.rule ?? null,
+      operations: s.operations?.length ? s.operations : null,
+      note: s.note ?? null,
+    },
+  };
+}
+
+function emptyResult(
+  req: LPRequest,
+  varNames: string[],
+  costs: number[],
+): ModuleResult {
+  const maximize = req.sense === "max";
+  const improves = costs.some((c) => (maximize ? c > 1e-12 : c < -1e-12));
+  const zeros = Object.fromEntries(varNames.map((v) => [v, 0]));
+  return okResult("linear_programming", {
+    status: improves ? "unbounded" : "optimal",
+    variables: zeros,
+    objective_value: improves ? null : 0,
+    objective_sense: req.sense,
+    warnings: improves
+      ? ["Z no acotada: no hay restricciones que limiten a las variables con coeficiente favorable."]
+      : [],
+  });
+}
+
+export function solveLp(reqIn: LPRequest): ModuleResult {
+  const varNames = collectVarNames(reqIn);
+  const req = applyBounds(reqIn, varNames);
+  const maximize = req.sense === "max";
+  const costs = varNames.map((v) => req.objective[v] ?? 0);
+  const method = req.method === "two_phase" ? "two_phase" : "big_m";
+  const record = req.include_iterations === true;
+  const wantDual = req.include_dual === true;
+  const wantBasic = req.include_basic_solutions === true;
+
+  if (!req.constraints.length) return emptyResult(req, varNames, costs);
+
+  const form = buildStdForm(req.constraints, varNames);
+  const outcome = runSimplex(form, costs, req.sense, method, record);
+  const warnings: string[] = [];
+  const tables: NamedTable[] = [];
+  const iterations: IterationStep[] = outcome.snapshots.map((s, i) => stepOf(s, i));
+  if (wantDual) tables.push(standardFormTable(req, form, varNames, costs, method));
+
+  tieWarnings(outcome, warnings);
+  warnings.push(...outcome.warnings);
+
+  if (outcome.status === "iteration_limit") {
+    warnings.push("El simplex alcanzó el límite de iteraciones sin terminar. Revisa el modelo (coeficientes muy grandes o muy pequeños).");
+    return okResult("linear_programming", {
+      status: "error",
+      variables: Object.fromEntries(varNames.map((v) => [v, 0])),
+      objective_sense: req.sense,
+      iterations: record ? iterations : null,
+      tables,
       warnings,
     });
   }
 
+  if (outcome.status !== "optimal") {
+    if (outcome.status === "infeasible") {
+      const arts = outcome.positiveArtificials ?? [];
+      const which = arts.map((a) => `${a.name} = ${fmtPlain(a.value)} (restricción ${req.constraints[a.row]?.id ?? a.row + 1})`);
+      warnings.unshift(
+        `Infactible: ninguna solución cumple todas las restricciones a la vez.${which.length ? ` La artificial ${which.join(", ")} no pudo salir de la base.` : ""}`,
+      );
+    } else {
+      warnings.unshift(
+        `Z no acotada: ${outcome.unboundedVar ?? "una variable"} puede crecer sin límite porque ninguna restricción la frena (su columna no tiene valores positivos para la razón).`,
+      );
+    }
+    if (wantDual) {
+      const dual = buildDual({ sense: req.sense, varNames, costs, constraints: req.constraints, shadow: null, reduced: null, slacks: null, values: null });
+      tables.push(...dual.tables);
+      warnings.push(
+        outcome.status === "infeasible"
+          ? "Teoría de la dualidad: si el primal es infactible, el dual es no acotado o también infactible."
+          : "Teoría de la dualidad: si el primal es no acotado, el dual es infactible.",
+      );
+    }
+    let graph = null;
+    if (req.include_graph !== false && varNames.length === 2) {
+      const built = buildLpGraph(req, {}, null);
+      graph = built.graph;
+    }
+    return okResult("linear_programming", {
+      status: outcome.status,
+      variables: Object.fromEntries(varNames.map((v) => [v, 0])),
+      objective_value: null,
+      objective_sense: req.sense,
+      metrics: { iterations: countPivots(outcome) },
+      iterations: record ? iterations : null,
+      graph,
+      tables: tables.length ? tables : null,
+      warnings,
+    });
+  }
+
+  const xAll = solutionOf(outcome.tab, form.colNames.length);
+  const variables = Object.fromEntries(varNames.map((v, j) => [v, xAll[j]]));
+  const zUser = snap(costs.reduce((s, c, j) => s + c * xAll[j], 0));
+
+  const degenerate = outcome.tab.basic
+    .map((bc, i) => ({ bc, v: outcome.tab.rhs[i] }))
+    .filter(({ bc, v }) => Math.abs(v) < 1e-9 && form.kinds[bc] !== "artificial")
+    .map(({ bc }) => form.colNames[bc]);
+  if (degenerate.length) {
+    warnings.push(
+      `Degeneración: la variable básica ${degenerate.join(", ")} vale 0. La solución es degenerada (hay restricciones de más pasando por el mismo vértice).`,
+    );
+  }
+
+  const alt = alternativeOptimum(outcome, form);
+  if (alt) {
+    warnings.push(
+      `Óptimos múltiples: ${alt.columns.join(", ")} no es básica y su coeficiente en la fila Z es 0, así que puede entrar sin cambiar Z.`,
+    );
+    if (alt.x) {
+      tables.push({
+        name: "solucion_alternativa",
+        columns: ["variable", "solucion_1", "solucion_2"],
+        rows: form.colNames
+          .map((name, j) => (form.kinds[j] === "artificial" ? null : [name, xAll[j], alt.x![j]]))
+          .filter((r): r is (string | number)[] => r !== null),
+      });
+      if (record && alt.snapshot) iterations.push(stepOf(alt.snapshot, iterations.length));
+    } else {
+      warnings.push("La solución alterna no tiene límite en esa dirección: hay infinitas soluciones óptimas sobre un rayo.");
+    }
+  }
+
+  let sensitivity: SensitivityBlock | null = null;
+  if (req.include_sensitivity) {
+    const fb = finalBasisWithoutArtificials(outcome, form, costs, req.sense);
+    sensitivity = computeSensitivity({
+      form,
+      basic: fb.basic,
+      rows: fb.rows,
+      costs,
+      maximize,
+      varNames,
+      constraints: req.constraints,
+      variables,
+      warnings,
+    });
+  }
+
+  const metrics: Record<string, number> = { iterations: countPivots(outcome) };
+  if (wantDual) {
+    const shadow = sensitivity
+      ? new Map(sensitivity.shadow_prices.map((r) => [String(r.constraint_id), Number(r.shadow_price)]))
+      : null;
+    const reduced = sensitivity
+      ? new Map(sensitivity.reduced_costs.map((r) => [String(r.variable), Number(r.reduced_cost)]))
+      : null;
+    const slacks = sensitivity
+      ? new Map(sensitivity.constraint_analysis.map((r) => [String(r.constraint_id), Number(r.slack_or_surplus)]))
+      : null;
+    const dual = buildDual({ sense: req.sense, varNames, costs, constraints: req.constraints, shadow, reduced, slacks, values: variables });
+    tables.push(...dual.tables);
+    if (dual.dualObjective != null) metrics.dual_objective = dual.dualObjective;
+  }
+
+  if (wantBasic) {
+    const basicSol = basicSolutionsTable(form, costs, zUser);
+    if (basicSol.table) tables.push(basicSol.table);
+    if (basicSol.note) warnings.push(basicSol.note);
+  }
+
   let graph = null;
-  let tables = null;
   if (req.include_graph) {
     const built = buildLpGraph(req, variables, zUser);
     graph = built.graph;
@@ -218,7 +360,7 @@ export function solveLp(req: LPRequest): ModuleResult {
       const yName = graph.y_label ?? varNames[1];
       const oz = graph.z_label ? (variables[graph.z_label] ?? 0) : undefined;
       const vertexTable = verticesNamedTable(graph, variables[xName] ?? 0, variables[yName] ?? 0, maximize, oz);
-      tables = vertexTable ? [vertexTable] : null;
+      if (vertexTable) tables.unshift(vertexTable);
     }
   }
 
@@ -227,172 +369,28 @@ export function solveLp(req: LPRequest): ModuleResult {
     variables,
     objective_value: zUser,
     objective_sense: req.sense,
-    metrics: {},
-    iterations: req.include_iterations ? iterations : null,
+    metrics,
+    iterations: record ? iterations : null,
     sensitivity,
     graph,
-    tables,
+    tables: tables.length ? tables : null,
     warnings,
   });
 }
 
-function resultOf(
-  req: LPRequest,
-  status: "optimal" | "infeasible" | "unbounded",
-  variables: Record<string, number>,
-  objective: number | null,
-  iterations: IterationStep[],
-  sensitivity: SensitivityBlock | null,
-  warnings: string[],
-): ModuleResult {
-  return okResult("linear_programming", {
-    status,
-    variables,
-    objective_value: objective,
-    objective_sense: req.sense,
-    metrics: {},
-    iterations: iterations.length ? iterations : null,
-    sensitivity,
-    warnings,
-  });
+function countPivots(outcome: EngineOutcome): number {
+  return outcome.pivots;
 }
 
-function hstack(A: number[][], extra: number[][]): number[][] {
-  return A.map((row, i) => [...row, ...extra.map((col) => col[i])]);
-}
-
-function pivotTableau(body: number[][], xB: number[], basic: number[], leaveRow: number, enter: number): void {
-  const pivot = body[leaveRow][enter];
-  for (let j = 0; j < body[leaveRow].length; j++) body[leaveRow][j] /= pivot;
-  xB[leaveRow] /= pivot;
-  for (let i = 0; i < body.length; i++) {
-    if (i === leaveRow) continue;
-    const factor = body[i][enter];
-    for (let j = 0; j < body[i].length; j++) body[i][j] -= factor * body[leaveRow][j];
-    xB[i] -= factor * xB[leaveRow];
-  }
-  basic[leaveRow] = enter;
-}
-
-function ejectArtificials(
-  A: number[][],
-  b: number[],
-  basic: number[],
-  artSet: Set<number>,
-  tol = 1e-9,
-): { A: number[][]; b: number[]; keepRows: number[] } {
-  const body = cloneMat(A);
-  const xB = b.slice();
-  const m = body.length;
-  const n = body[0].length;
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (let i = 0; i < m; i++) {
-      const bi = basic[i];
-      if (!artSet.has(bi) || Math.abs(xB[i]) > tol) continue;
-      const nonbasic = [...Array(n).keys()].filter((j) => !basic.includes(j));
-      const enter = nonbasic.find((j) => !artSet.has(j) && Math.abs(body[i][j]) > tol);
-      if (enter == null) continue;
-      pivotTableau(body, xB, basic, i, enter);
-      changed = true;
-      break;
-    }
-  }
-  const keepRows = [...Array(body.length).keys()].filter((i) => !artSet.has(basic[i]) || Math.abs(xB[i]) > tol);
-  if (keepRows.length < body.length) {
-    const A2 = keepRows.map((i) => body[i]);
-    const b2 = keepRows.map((i) => xB[i]);
-    const basic2 = keepRows.map((i) => basic[i]);
-    basic.length = 0;
-    basic.push(...basic2);
-    return { A: A2, b: b2, keepRows };
-  }
-  basic.splice(0, basic.length, ...basic);
-  return { A: body, b: xB, keepRows };
-}
-
-function simplexLoop(
-  AIn: number[][],
-  bIn: number[],
-  c: number[],
-  basic: number[],
-  colNames: string[],
-  phaseLabel: string,
-  startIndex: number,
-  maxIters = 200,
-): { status: SimplexStatus; A: number[][]; b: number[]; iterations: IterationStep[] } {
-  const iterations: IterationStep[] = [];
-  let A = cloneMat(AIn);
-  let b = bIn.slice();
-  const m = A.length;
-  const n = A[0].length;
-
-  for (let k = 0; k < maxIters; k++) {
-    let BInv: number[][];
-    try {
-      BInv = invert(columns(A, basic));
-    } catch {
-      BInv = pinv(columns(A, basic));
-    }
-    let xB = matvec(BInv, b);
-    xB = xB.map((v) => (Math.abs(v) < 1e-12 ? 0 : v));
-    const cB = basic.map((j) => c[j]);
-    const y = vecmat(cB, BInv);
-    const reduced = c.map((cj, j) => cj - y.reduce((s, yi, i) => s + yi * A[i][j], 0));
-    const z = cB.reduce((s, v, i) => s + v * xB[i], 0);
-    const bodyFixed = BInv.map((bRow) =>
-      Array.from({ length: n }, (_, j) => bRow.reduce((s, bij, t) => s + bij * A[t][j], 0)),
+function tieWarnings(outcome: EngineOutcome, warnings: string[]): void {
+  if (outcome.ties.entering > 0) {
+    warnings.push(
+      "Empate en la variable que entra: dos o más columnas tenían el mismo coeficiente en la fila Z. Se eligió la primera de izquierda a derecha (cualquiera es válida).",
     );
-    const nonbasic = [...Array(n).keys()].filter((j) => !basic.includes(j));
-    const cjRow: (number | string)[] = ["Cj", "", ...c.map((v) => v)];
-    const headerRow: (number | string)[] = ["Base", "Xb", ...colNames];
-    const bodyRows: (number | string)[][] = [];
-    for (let i = 0; i < m; i++) {
-      const baseName = colNames[basic[i]] ?? `s${i}`;
-      bodyRows.push([baseName, xB[i], ...bodyFixed[i].map((v) => v)]);
-    }
-    const zjRow: (number | string)[] = ["Zj−Cj", z, ...reduced.map((v) => v)];
-    iterations.push({
-      index: startIndex + k,
-      method: "simplex",
-      title: `${phaseLabel} — Iteración ${k}`,
-      tableau: [cjRow, headerRow, ...bodyRows, zjRow],
-      meta: {
-        basic: basic.map((i) => colNames[i]),
-        nonbasic: nonbasic.map((j) => colNames[j]),
-        pivot: null,
-        z,
-        phase: phaseLabel,
-      },
-    });
-
-    const enterCandidates = nonbasic.filter((j) => reduced[j] > 1e-9).map((j) => [reduced[j], j] as const);
-    if (!enterCandidates.length) {
-      return { status: "optimal", A: cloneMat(bodyFixed), b: xB.slice(), iterations };
-    }
-    const enter = enterCandidates.reduce((best, cur) => (cur[0] > best[0] ? cur : best))[1];
-    const col = bodyFixed.map((row) => row[enter]);
-    const ratios = col
-      .map((v, i) => [v, i] as const)
-      .filter(([v]) => v > 1e-12)
-      .map(([v, i]) => [xB[i] / v, i] as const);
-    if (!ratios.length) {
-      return { status: "unbounded", A: cloneMat(bodyFixed), b: xB.slice(), iterations };
-    }
-    const leaveRow = ratios.reduce((best, cur) => (cur[0] < best[0] ? cur : best))[1];
-    const leaveCol = basic[leaveRow];
-    iterations[iterations.length - 1].meta.pivot = {
-      row: leaveRow + 2,
-      col: enter + 2,
-      enter: colNames[enter],
-      leave: colNames[leaveCol],
-    };
-    const work = cloneMat(bodyFixed);
-    const xWork = xB.slice();
-    pivotTableau(work, xWork, basic, leaveRow, enter);
-    A = work;
-    b = xWork;
   }
-  return { status: "unbounded", A, b, iterations };
+  if (outcome.ties.leaving > 0) {
+    warnings.push(
+      "Empate en la razón mínima: dos o más filas tenían la misma razón. Se eligió la de más arriba; la otra básica queda en 0 (solución degenerada).",
+    );
+  }
 }

@@ -2,8 +2,7 @@ import { SolverError } from "../../errors";
 import { LIMITS, assertLimit } from "../../limits";
 import type { GraphNetwork, IterationStep, ModuleResult, NamedTable } from "../../schema";
 import { okResult } from "../../schema";
-import { solveLp } from "../lp/solver";
-import type { LPConstraint } from "../lp/types";
+import { networkSimplex, type FlowArc } from "./networkSimplex";
 
 export type NetworkEdge = {
   source: string;
@@ -110,7 +109,7 @@ function shortest(req: NetworksRequest): ModuleResult {
   }
   if (!req.edges.length) throw new SolverError("las aristas son obligatorias para ruta más corta");
   assertEdgesKnown(req);
-  const { dist, prev } = shortestPaths(req.nodes, req.edges, req.source, req.directed, req.sink);
+  const { dist, prev, steps } = shortestPaths(req.nodes, req.edges, req.source, req.directed, req.sink);
   if (!(req.sink in dist) || dist[req.sink] === Infinity) {
     throw new SolverError(`No hay ruta de ${req.source} a ${req.sink}`);
   }
@@ -139,12 +138,73 @@ function shortest(req: NetworksRequest): ModuleResult {
     title: "Ruta más corta",
     subtitle: `Longitud = ${formatMetric(length)} · magenta = nodos y arcos de la ruta`,
   };
+  const pathTo = (n: string): string => {
+    const out: string[] = [];
+    const guard = new Set<string>();
+    let c: string | undefined = n;
+    while (c && !guard.has(c)) {
+      guard.add(c);
+      out.push(c);
+      c = prev[c];
+    }
+    return out.reverse().join(" → ");
+  };
+  const distRows = req.nodes.map((n) => [
+    n,
+    Number.isFinite(dist[n]) ? dist[n] : "sin ruta",
+    prev[n] ?? (n === req.source ? "—" : "—"),
+    Number.isFinite(dist[n]) ? pathTo(n) : "—",
+  ]);
+  const alternatives = allShortestPaths(req, dist, req.source, req.sink, 6);
+  const warnings: string[] = [];
+  if (alternatives.length > 1) {
+    warnings.push(
+      `Hay más de una ruta más corta (todas miden ${formatMetric(length)}): ${alternatives.map((p) => p.join(" → ")).join("; ")}.`,
+    );
+  }
   return ok({
     variables: {},
     metrics: { path_length: length },
-    tables: [{ name: "ruta", columns: ["orden", "nodo"], rows: path.map((n, i) => [i, n]) }],
+    warnings,
+    tables: [
+      { name: "ruta", columns: ["orden", "nodo"], rows: path.map((n, i) => [i, n]) },
+      { name: "distancias", columns: ["nodo", "distancia_minima", "llega_desde", "ruta_desde_origen"], rows: distRows },
+    ],
     graph,
+    iterations: steps,
   });
+}
+
+/** Todas las rutas de longitud mínima (arcos con dist[u] + w = dist[v]), hasta `limit`. */
+function allShortestPaths(
+  req: NetworksRequest,
+  dist: Record<string, number>,
+  source: string,
+  sink: string,
+  limit: number,
+): string[][] {
+  const arcs = arcsOf(req.edges, req.directed).filter(
+    (a) => Number.isFinite(dist[a.u]) && Math.abs(dist[a.u] + a.w - dist[a.v]) <= 1e-9 && a.w > 0,
+  );
+  const into = new Map<string, string[]>();
+  for (const a of arcs) {
+    if (!into.has(a.v)) into.set(a.v, []);
+    if (!into.get(a.v)!.includes(a.u)) into.get(a.v)!.push(a.u);
+  }
+  const out: string[][] = [];
+  const walk = (node: string, tail: string[]) => {
+    if (out.length >= limit) return;
+    if (node === source) {
+      out.push([source, ...tail]);
+      return;
+    }
+    for (const p of [...(into.get(node) ?? [])].sort()) {
+      if (tail.includes(p)) continue;
+      walk(p, [node, ...tail]);
+    }
+  };
+  walk(sink, []);
+  return out;
 }
 
 function arcsOf(edges: NetworkEdge[], directed: boolean): { u: string; v: string; w: number }[] {
@@ -163,43 +223,71 @@ function shortestPaths(
   source: string,
   directed: boolean,
   sink: string,
-): { dist: Record<string, number>; prev: Record<string, string | undefined> } {
+): { dist: Record<string, number>; prev: Record<string, string | undefined>; steps: IterationStep[] } {
   const arcs = arcsOf(edges, directed);
-  if (arcs.some((a) => a.w < 0)) return bellmanFord(nodes, arcs, source, sink);
+  if (arcs.some((a) => a.w < 0)) return { ...bellmanFord(nodes, arcs, source, sink), steps: [] };
   return dijkstra(nodes, arcs, source);
 }
 
+/**
+ * Algoritmo de la ruta más corta (Dijkstra) con la tabla del libro: en cada iteración se
+ * elige el n-ésimo nodo más cercano entre los conectados a los ya resueltos.
+ */
 function dijkstra(
   nodes: string[],
   arcs: { u: string; v: string; w: number }[],
   source: string,
-): { dist: Record<string, number>; prev: Record<string, string | undefined> } {
+): { dist: Record<string, number>; prev: Record<string, string | undefined>; steps: IterationStep[] } {
   const adj = new Map<string, { to: string; w: number }[]>();
   for (const n of nodes) adj.set(n, []);
   for (const a of arcs) adj.get(a.u)?.push({ to: a.v, w: a.w });
   const dist: Record<string, number> = Object.fromEntries(nodes.map((n) => [n, Infinity]));
   const prev: Record<string, string | undefined> = {};
   dist[source] = 0;
-  const used = new Set<string>();
-  while (used.size < nodes.length) {
-    let u: string | null = null;
-    let best = Infinity;
-    for (const n of nodes) {
-      if (!used.has(n) && dist[n] < best) {
-        best = dist[n];
-        u = n;
+  const solved: string[] = [source];
+  const solvedSet = new Set(solved);
+  const steps: IterationStep[] = [];
+  const header = ["Nodo resuelto", "Nodo no resuelto más cercano", "Distancia total", "¿Mínima?"];
+  for (let n = 1; n < nodes.length; n++) {
+    const cands: { from: string; to: string; total: number }[] = [];
+    let best: { node: string; from: string; total: number } | null = null;
+    for (const r of solved) {
+      let nearest: { to: string; w: number } | null = null;
+      for (const e of adj.get(r) ?? []) {
+        if (solvedSet.has(e.to)) continue;
+        if (!nearest || e.w < nearest.w || (e.w === nearest.w && e.to < nearest.to)) nearest = e;
       }
+      if (!nearest) continue;
+      const total = dist[r] + nearest.w;
+      cands.push({ from: r, to: nearest.to, total });
+      if (!best || total < best.total - 1e-12) best = { node: nearest.to, from: r, total };
     }
-    if (u == null || best === Infinity) break;
-    used.add(u);
-    for (const { to, w } of adj.get(u) ?? []) {
-      if (dist[u] + w < dist[to]) {
-        dist[to] = dist[u] + w;
-        prev[to] = u;
-      }
-    }
+    if (!best) break;
+    const chosen = best;
+    const rows: (string | number)[][] = cands.map((c) => [
+      c.from,
+      c.to,
+      `${formatMetric(dist[c.from])} + ${formatMetric(c.total - dist[c.from])} = ${formatMetric(c.total)}`,
+      Math.abs(c.total - chosen.total) < 1e-9 ? "sí" : "",
+    ]);
+    dist[best.node] = best.total;
+    prev[best.node] = best.from;
+    solved.push(best.node);
+    solvedSet.add(best.node);
+    steps.push({
+      index: n,
+      method: "dijkstra",
+      title: `${n}.º nodo más cercano: ${best.node} (distancia ${formatMetric(best.total)}, llega desde ${best.from})`,
+      tableau: [header, ...rows],
+      meta: {
+        nodo: best.node,
+        distancia: best.total,
+        ultima_conexion: `${best.from} → ${best.node}`,
+        resueltos: solved.join(", "),
+      },
+    });
   }
-  return { dist, prev };
+  return { dist, prev, steps };
 }
 
 function bellmanFord(
@@ -345,8 +433,14 @@ function maxFlow(req: NetworksRequest): ModuleResult {
   for (const e of req.edges) {
     if (e.source === e.target) continue;
     const cap = e.capacity ?? e.weight;
+    if (!(cap >= 0)) throw new SolverError(`La capacidad de ${e.source} → ${e.target} debe ser un número mayor o igual que 0.`);
     const key = arcKey(e.source, e.target);
     capacities.set(key, (capacities.get(key) ?? 0) + cap);
+    // En una red no dirigida cada arista puede usarse en cualquier sentido.
+    if (!req.directed) {
+      const back = arcKey(e.target, e.source);
+      capacities.set(back, (capacities.get(back) ?? 0) + cap);
+    }
   }
   for (const [key, cap] of capacities) {
     const [u, v] = key.split("\u0000");
@@ -368,11 +462,11 @@ function maxFlow(req: NetworksRequest): ModuleResult {
   let step = 0;
   while (true) {
     const parent: Record<string, string | null> = { [req.source]: null };
-    const queue = [req.source];
+    const queue: string[] = [req.source];
     let found = req.source === req.sink;
     while (queue.length && !found) {
-      const u = queue.shift()!;
-      for (const [v, cap] of residual.get(u) ?? []) {
+      const u: string = queue.shift()!;
+      for (const [v, cap] of residual.get(u) ?? new Map<string, number>()) {
         if (cap > 1e-9 && !(v in parent)) {
           parent[v] = u;
           if (v === req.sink) {
@@ -385,7 +479,7 @@ function maxFlow(req: NetworksRequest): ModuleResult {
     }
     if (!found || !(req.sink in parent)) break;
     const path: string[] = [];
-    let v = req.sink;
+    let v: string = req.sink;
     let bottleneck = Infinity;
     while (v !== req.source) {
       const u = parent[v];
@@ -454,7 +548,7 @@ function maxFlow(req: NetworksRequest): ModuleResult {
   };
   const graph: GraphNetwork = {
     type: "network",
-    directed: true,
+    directed: req.directed,
     nodes: req.nodes.map((n) => ({ id: n, critical: reachable.has(n) })),
     edges: req.edges
       .filter((e) => e.source !== e.target)
@@ -482,90 +576,108 @@ function maxFlow(req: NetworksRequest): ModuleResult {
 
 function transshipment(req: NetworksRequest): ModuleResult {
   if (!req.node_supply) {
-    throw new SolverError("node_supply es obligatorio para transbordo (positivo = oferta, negativo = demanda)");
+    throw new SolverError("Indica la oferta (+), la demanda (−) o 0 (transbordo) de cada nodo.");
   }
-  if (!req.edges.length) throw new SolverError("las aristas son obligatorias para transbordo");
+  if (!req.edges.length) throw new SolverError("Agrega al menos un arco con su costo.");
   assertEdgesKnown(req);
-  const supplyKeys = Object.keys(req.node_supply).sort();
-  const nodeKeys = [...req.nodes].sort();
-  if (supplyKeys.length !== nodeKeys.length || supplyKeys.some((key, i) => key !== nodeKeys[i])) {
-    throw new SolverError("las claves de node_supply deben coincidir exactamente con los nodos");
+  for (const n of Object.keys(req.node_supply)) {
+    if (!req.nodes.includes(n)) throw new SolverError(`La oferta/demanda menciona el nodo «${n}», que no está en la lista.`);
   }
-  const total = Object.values(req.node_supply).reduce((a, b) => a + b, 0);
-  if (Math.abs(total) > 1e-6) {
-    throw new SolverError(`red desbalanceada: oferta/demanda total = ${total}, debe sumar 0`);
+  const supply: Record<string, number> = Object.fromEntries(req.nodes.map((n) => [n, req.node_supply![n] ?? 0]));
+  const totalSupply = Object.values(supply).filter((b) => b > 0).reduce((a, b) => a + b, 0);
+  const totalDemand = -Object.values(supply).filter((b) => b < 0).reduce((a, b) => a + b, 0);
+  const excess = totalSupply - totalDemand;
+  const warnings: string[] = [];
+  if (excess < -1e-9) {
+    throw new SolverError(
+      `La demanda total (${formatMetric(totalDemand)}) es mayor que la oferta total (${formatMetric(totalSupply)}): no se puede atender a todos. Agrega oferta o un origen ficticio.`,
+    );
   }
-
-  const varNames = req.edges.map((e, i) => `f_${i}`);
-  const objective: Record<string, number> = {};
-  const constraints: LPConstraint[] = [];
-  req.edges.forEach((e, i) => {
-    objective[varNames[i]] = e.weight;
-    if (e.capacity != null) {
-      constraints.push({
-        id: `cap_${i}`,
-        coeffs: { [varNames[i]]: 1 },
-        sense: "<=",
-        rhs: e.capacity,
-      });
+  const arcs: FlowArc[] = [];
+  req.edges.forEach((e) => {
+    if (!Number.isFinite(e.weight)) throw new SolverError(`El costo de ${e.source} → ${e.target} no es un número.`);
+    if (e.capacity != null && !(e.capacity >= 0)) {
+      throw new SolverError(`La capacidad de ${e.source} → ${e.target} debe ser mayor o igual que 0.`);
     }
+    arcs.push({ from: e.source, to: e.target, cost: e.weight, cap: e.capacity });
+    if (!req.directed) arcs.push({ from: e.target, to: e.source, cost: e.weight, cap: e.capacity });
   });
-  for (const node of req.nodes) {
-    const coeffs: Record<string, number> = {};
-    req.edges.forEach((e, i) => {
-      if (e.source === node) coeffs[varNames[i]] = (coeffs[varNames[i]] ?? 0) + 1;
-      if (e.target === node) coeffs[varNames[i]] = (coeffs[varNames[i]] ?? 0) - 1;
-    });
-    constraints.push({
-      id: `balance_${node}`,
-      coeffs,
-      sense: "=",
-      rhs: req.node_supply![node],
+  const nodes = [...req.nodes];
+  const DUMMY = "Ficticio";
+  if (excess > 1e-9) {
+    nodes.push(DUMMY);
+    supply[DUMMY] = -excess;
+    for (const n of req.nodes) {
+      if (supply[n] > 0) arcs.push({ from: n, to: DUMMY, cost: 0, cap: null, label: `${n}→${DUMMY}` });
+    }
+    warnings.push(
+      `La oferta supera a la demanda en ${formatMetric(excess)}: se agregó un destino ficticio con costo 0 que recibe lo que no se envía.`,
+    );
+  }
+  const res = networkSimplex(nodes, arcs, supply, true);
+  warnings.push(...res.warnings);
+  if (res.status !== "optimal") {
+    return okResult("networks", {
+      status: res.status,
+      objective_sense: "min",
+      iterations: res.iterations.length ? res.iterations : null,
+      warnings,
     });
   }
-  const lp = solveLp({
-    sense: "min",
-    objective,
-    constraints,
-    variable_names: varNames,
-    include_iterations: false,
-    include_sensitivity: false,
-    include_graph: false,
-  });
-  if (lp.status !== "optimal") {
-    throw new SolverError(`el problema de transbordo es ${lp.status}`);
-  }
+  const realCount = arcs.length - (excess > 1e-9 ? req.nodes.filter((n) => supply[n] > 0).length : 0);
   const rows: unknown[][] = [];
   const variables: Record<string, number> = {};
-  req.edges.forEach((e, i) => {
-    const f = lp.solution.variables[varNames[i]] ?? 0;
+  const flowByKey = new Map<string, number>();
+  for (let i = 0; i < realCount; i++) {
+    const a = arcs[i];
+    const f = res.flows[i];
     if (f > 1e-9) {
-      rows.push([e.source, e.target, f, e.weight, f * e.weight]);
-      variables[`${e.source}->${e.target}`] = f;
+      rows.push([a.from, a.to, f, a.cost, f * a.cost]);
+      variables[`${a.from}->${a.to}`] = f;
+      flowByKey.set(arcKey(a.from, a.to), (flowByKey.get(arcKey(a.from, a.to)) ?? 0) + f);
     }
+  }
+  const unsent: unknown[][] = [];
+  for (let i = realCount; i < arcs.length; i++) {
+    if (res.flows[i] > 1e-9) unsent.push([arcs[i].from, res.flows[i]]);
+  }
+  const balanceRows = req.nodes.map((n) => {
+    let inflow = 0;
+    let outflow = 0;
+    for (let i = 0; i < realCount; i++) {
+      if (arcs[i].to === n) inflow += res.flows[i];
+      if (arcs[i].from === n) outflow += res.flows[i];
+    }
+    const b = req.node_supply![n] ?? 0;
+    return [n, b > 0 ? "oferta" : b < 0 ? "demanda" : "transbordo", b, inflow, outflow];
   });
-  const totalCost = lp.solution.objective_value ?? 0;
+  const totalCost = res.cost;
   const graph: GraphNetwork = {
     type: "network",
     directed: true,
-    nodes: req.nodes.map((n) => ({ id: n, supply_demand: req.node_supply![n] })),
-    edges: req.edges.map((e, i) => ({
+    nodes: req.nodes.map((n) => ({ id: n, supply_demand: req.node_supply![n] ?? 0 })),
+    edges: req.edges.map((e) => ({
       source: e.source,
       target: e.target,
       cost: e.weight,
       capacity: e.capacity,
-      flow: lp.solution.variables[varNames[i]] ?? 0,
+      flow: flowByKey.get(arcKey(e.source, e.target)) ?? 0,
     })),
-    title: "Transbordo",
+    title: "Flujo de costo mínimo (transbordo)",
     subtitle: `Costo = ${formatMetric(totalCost)} · cian = arcos con flujo`,
   };
+  const tables: NamedTable[] = [
+    { name: "flows", columns: ["origen", "destino", "flujo", "costo_unitario", "costo"], rows },
+    { name: "balance_nodos", columns: ["nodo", "tipo", "oferta_demanda", "entra", "sale"], rows: balanceRows },
+  ];
+  if (unsent.length) tables.push({ name: "oferta_sin_enviar", columns: ["origen", "cantidad"], rows: unsent });
   return ok({
     variables,
-    metrics: { total_cost: totalCost },
-    tables: [
-      { name: "flows", columns: ["origen", "destino", "flujo", "costo_unitario", "costo"], rows },
-    ],
+    metrics: { total_cost: totalCost, network_simplex_iterations: Math.max(0, res.iterations.length - 1) },
+    tables,
     graph,
+    iterations: res.iterations,
+    warnings,
   });
 }
 
