@@ -32,6 +32,8 @@ type Props = {
   editor?: ReactNode;
   /** El editor funciona bien en pantallas chicas: oculta el aviso móvil. */
   mobileFriendly?: boolean;
+  /** Sustituye las pestañas genéricas cuando el módulo trae su propia lectura del resultado. */
+  renderResult?: (result: ModuleResult) => ReactNode;
 };
 
 export default function ModuleWorkbench({
@@ -54,6 +56,7 @@ export default function ModuleWorkbench({
   sheetKind = "generic",
   editor,
   mobileFriendly = false,
+  renderResult,
 }: Props) {
   const [tab, setTab] = useState<"datos" | "resultados">("datos");
   const [result, setResult] = useState<ModuleResult | null>(null);
@@ -165,7 +168,7 @@ export default function ModuleWorkbench({
         </form>
       ) : result ? (
         <>
-          <ResultsTabs result={result} />
+          {renderResult ? renderResult(result) : <ResultsTabs result={result} />}
           {error && (
             <p className="error-inline" role="alert">
               {error}
