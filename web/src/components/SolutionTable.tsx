@@ -28,8 +28,8 @@ export default function SolutionTable({
       {caption ? <caption className="section-label">{caption}</caption> : null}
       <thead>
         <tr>
-          {columns.map((c) => (
-            <th key={c} scope="col">
+          {columns.map((c, j) => (
+            <th key={c} scope="col" className={textColumns.includes(j) ? "col-text" : undefined}>
               {c}
             </th>
           ))}

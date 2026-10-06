@@ -39,8 +39,11 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
     module: "queues",
     title: "Teoría de colas",
     required: ["model", "lambda", "mu"],
-    example: { model: "M/M/1", lambda: 10, mu: 15, s: 2 },
-    notes: "model: M/M/1, M/M/s, M/M/1/K, M/M/s/K, M/M/s/N, M/G/1, M/D/1",
+    example: { model: "M/M/s", lambda: 10, mu: 6, s: 2, time_unit: "hora", wait_threshold: 0.25 },
+    notes:
+      "model: M/M/1, M/M/s, M/M/1/K, M/M/s/K, M/M/s/N (población finita N), M/G/1 (service_std_dev), M/D/1. " +
+      "lambda y mu son tasas en la misma unidad de tiempo. Opcionales: cost_waiting_per_unit_time, cost_server_per_unit_time, " +
+      "waiting_cost_basis (system = L, queue = Lq), optimize_s, s_max, wait_threshold (t) y time_unit (etiqueta).",
   },
   inventory: {
     module: "inventory",

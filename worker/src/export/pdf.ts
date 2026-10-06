@@ -2,14 +2,45 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ModuleResult } from "../schema";
 import { labelColumns, labelKey, labelTableName } from "./labels";
 
+/** Helvetica estándar solo cubre Latin-1: se transliteran los símbolos usuales de las fórmulas. */
+const SYMBOLS: Record<string, string> = {
+  λ: "lambda",
+  μ: "mu",
+  ρ: "rho",
+  σ: "sigma",
+  π: "pi",
+  Σ: "Suma",
+  "∫": "Int",
+  "≤": "<=",
+  "≥": ">=",
+  "⇔": "<=>",
+  "∞": "infinito",
+  "−": "-",
+  "–": "-",
+  "—": "-",
+  "…": "...",
+  "₀": "0",
+  "ⁿ": "^n",
+  "√": "raiz",
+};
+
 function safe(text: string): string {
-  return text.replace(/[^\x09\x0A\x0D\x20-\x7EÀ-ÿ]/g, "?");
+  return text
+    .replace(/[λμρσπΣ∫≤≥⇔∞−–—…₀ⁿ√]/g, (ch) => SYMBOLS[ch] ?? ch)
+    .replace(/[^\x09\x0A\x0D\x20-\x7EÀ-ÿ\xA0-\xBF×÷]/g, "?");
 }
 
 /** Números legibles en el reporte: hasta 4 decimales, sin colas de punto flotante. */
 function num(v: unknown): string {
   if (typeof v === "number" && Number.isFinite(v)) return String(Number(v.toFixed(4)));
+  if (typeof v === "number" && !Number.isNaN(v)) return v > 0 ? "infinito" : "-infinito";
   return v == null ? "" : String(v);
+}
+
+/** Algunos módulos (p. ej. colas) repiten las métricas como variables; no se listan dos veces. */
+function variablesMirrorMetrics(result: ModuleResult): boolean {
+  const metrics = result.solution.metrics ?? {};
+  return Object.entries(result.solution.variables).every(([k, v]) => metrics[k] === v);
 }
 
 export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Array> {
@@ -62,7 +93,7 @@ export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Arra
     for (const [name, value] of Object.entries(result.solution.variables).slice(0, 40)) {
       draw(`${name} | ${value} | ${coef[name] ?? ""} | ${rc[name] ?? 0}`, false, 9);
     }
-  } else if (Object.keys(result.solution.variables).length) {
+  } else if (Object.keys(result.solution.variables).length && !variablesMirrorMetrics(result)) {
     draw("Variables", true);
     for (const [name, value] of Object.entries(result.solution.variables).slice(0, 40)) {
       draw(`  ${name} = ${num(value)}`);

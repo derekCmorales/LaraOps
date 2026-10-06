@@ -1,8 +1,5 @@
 /** Estados iniciales vacíos (sin ejemplo precargado) para módulos con formulario. */
 
-export const QUEUES_EMPTY = { model: "M/M/1", lambda: 0, mu: 0, s: 1, service_std_dev: 0 };
-export const QUEUES_EX = { model: "M/M/1", lambda: 10, mu: 15, s: 2, service_std_dev: 0.1 };
-
 export const INV_EMPTY = {
   model: "eoq",
   D: 0,

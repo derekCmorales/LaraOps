@@ -112,8 +112,39 @@ function explainAssignment(result: ModuleResult): string {
   return bits.join(" ");
 }
 
+function explainQueues(result: ModuleResult): string {
+  const m = result.solution.metrics || {};
+  const L = m.L;
+  if (L == null || !Number.isFinite(Number(L))) {
+    return "Cuando llegan clientes más rápido de lo que se pueden atender (ρ ≥ 1), la fila nunca se vacía y crece indefinidamente; por eso no hay promedios finitos. En la práctica la gente se desespera y se va, o se agregan servidores. Ajusta μ o s hasta que ρ sea menor que 1.";
+  }
+  const bits: string[] = [];
+  bits.push(
+    "La espera no crece en línea recta con la carga: con utilización ρ la fila promedio crece aproximadamente como ρ/(1 − ρ), así que pasar de 80 % a 90 % de ocupación duplica con creces la espera, y de 90 % a 95 % la vuelve a duplicar."
+  );
+  if (Number(m.rho) >= 0.85) {
+    bits.push(`Con ρ = ${fmtNum(m.rho)} estás en la zona donde un pequeño aumento de clientes dispara la espera (mira la curva en Gráficos).`);
+  } else if (Number(m.rho) < 0.5) {
+    bits.push(`Con ρ = ${fmtNum(m.rho)} los servidores pasan más de la mitad del tiempo libres: hay holgura para atender más clientes.`);
+  }
+  bits.push(
+    "La ley de Little (L = λ·W) conecta cuántos clientes hay con cuánto tiempo pasan: si reduces el tiempo de servicio, bajan las dos."
+  );
+  if (m.s_optimal != null) {
+    bits.push(
+      `Al comparar costos, cada servidor extra cuesta lo mismo pero ahorra cada vez menos espera; el punto donde la suma es mínima es s = ${fmtNum(m.s_optimal)}.`
+    );
+  }
+  if (m.P_block != null) {
+    bits.push("Con cupo limitado la fila nunca se desborda, pero el costo es que algunos clientes se van; revisa si esa pérdida es aceptable.");
+  }
+  bits.push("Los resultados son promedios de largo plazo: en un momento dado la fila puede ser más larga o más corta (revisa Pn en Gráficos).");
+  return bits.join(" ");
+}
+
 function explain(result: ModuleResult): string {
   if (result.module === "pert_cpm") return explainPert(result);
+  if (result.module === "queues") return explainQueues(result);
   if (result.module === "eoq") return explainEoq(result);
   if (result.module === "assignment") return explainAssignment(result);
   const s = result.status.toLowerCase();

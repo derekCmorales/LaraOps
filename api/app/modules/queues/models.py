@@ -1,50 +1,40 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class QueuesRequest(BaseModel):
-    model: Literal[
-        "M/M/1",
-        "M/M/s",
-        "M/M/1/K",
-        "M/M/s/N",
-        "M/M/s/K",
-        "M/G/1",
-        "M/D/1",
-    ]
-    lambda_: float = Field(alias="lambda", gt=0)
-    mu: float = Field(gt=0)
-    s: int | None = Field(default=None, ge=1)
-    K: int | None = Field(default=None, ge=1)
-    N: int | None = Field(default=None, ge=1)
-    service_std_dev: float | None = Field(
-        default=None, ge=0, description="Service time std. dev. (sigma), required for M/G/1"
+    """Petición de teoría de colas.
+
+    Los campos se aceptan sin restricciones de Pydantic para que el solver
+    responda con mensajes en español (HTTP 400) en lugar de errores 422 genéricos.
+    """
+
+    model: str
+    lambda_: Any = Field(default=None, alias="lambda", description="Tasa de llegada λ")
+    mu: Any = Field(default=None, description="Tasa de servicio μ por servidor")
+    s: Any = Field(default=None, description="Número de servidores (modelos M/M/s…)")
+    K: Any = Field(default=None, description="Capacidad máxima del sistema (M/M/1/K, M/M/s/K)")
+    N: Any = Field(default=None, description="Tamaño de la población (M/M/s/N, población finita)")
+    service_std_dev: Any = Field(
+        default=None, description="Desviación estándar del tiempo de servicio σ (M/G/1)"
     )
     include_pn: bool = True
 
-    # Optional costs and s-sweep optimization
-    cost_waiting_per_unit_time: float | None = Field(default=None, ge=0)
-    cost_server_per_unit_time: float | None = Field(default=None, ge=0)
-    optimize_s: bool = Field(
-        default=False, description="Sweep number of servers to minimize total expected cost"
+    cost_waiting_per_unit_time: Any = Field(default=None, description="Costo de espera por cliente")
+    cost_server_per_unit_time: Any = Field(default=None, description="Costo por servidor")
+    waiting_cost_basis: Any = Field(
+        default="system", description="«system» cobra la espera sobre L; «queue» sobre Lq"
     )
-    s_max: int | None = Field(default=None, ge=1, description="Upper bound for the s sweep")
+    optimize_s: bool = Field(
+        default=False, description="Compara el costo total para distintos números de servidores"
+    )
+    s_max: Any = Field(default=None, description="Máximo de servidores a comparar")
+    wait_threshold: Any = Field(
+        default=None, description="Tiempo t para calcular P(Wq > t) y P(W > t)"
+    )
+    time_unit: Any = Field(default=None, description="Etiqueta de la unidad de tiempo (solo informativa)")
 
     model_config = {"populate_by_name": True}
-
-    @model_validator(mode="after")
-    def _check_params(self) -> QueuesRequest:
-        if self.model in ("M/M/s", "M/M/s/N", "M/M/s/K") and self.s is None:
-            raise ValueError("s is required for multi-server models")
-        if self.model == "M/M/1/K" and self.K is None:
-            raise ValueError("K is required for M/M/1/K")
-        if self.model == "M/M/s/K" and self.K is None:
-            raise ValueError("K is required for M/M/s/K")
-        if self.model == "M/M/s/N" and self.N is None:
-            raise ValueError("N is required for M/M/s/N")
-        if self.model == "M/G/1" and self.service_std_dev is None:
-            raise ValueError("service_std_dev is required for M/G/1")
-        return self

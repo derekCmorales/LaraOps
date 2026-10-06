@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from io import BytesIO
 from typing import Any
 
@@ -57,19 +58,19 @@ def module_result_to_pdf(result: ModuleResult) -> bytes:
             ],
             result.sensitivity.constraint_analysis,
         )
-    elif result.solution.variables:
+    elif result.solution.variables and not _variables_mirror_metrics(result):
         pdf.set_font("Helvetica", "B", 10)
         _line(pdf, "Variables")
         pdf.set_font("Helvetica", size=10)
         for name, value in result.solution.variables.items():
-            _line(pdf, f"  {name} = {value}")
+            _line(pdf, f"  {name} = {_num(value)}")
 
     if result.solution.metrics:
         pdf.set_font("Helvetica", "B", 10)
         _line(pdf, "Métricas")
         pdf.set_font("Helvetica", size=10)
         for name, value in result.solution.metrics.items():
-            _line(pdf, f"  {label_key(name)} = {value}")
+            _line(pdf, f"  {label_key(name)} = {_num(value)}")
 
     if result.tables:
         for table in result.tables:
@@ -135,7 +136,7 @@ def module_result_to_pdf(result: ModuleResult) -> bytes:
             _line(pdf, "Tableau final (óptimo)")
             pdf.set_font("Helvetica", size=8)
             for row in last.tableau[:20]:
-                _line(pdf, " | ".join("" if v is None else str(v) for v in row))
+                _line(pdf, " | ".join(_num(v) for v in row))
             if len(last.tableau) > 20:
                 _line(pdf, f"... ({len(last.tableau) - 20} filas más en el tableau)")
 
@@ -195,7 +196,7 @@ def _write_matrix_pdf(pdf: FPDF, headers: list[str], rows: list[list[Any]]) -> N
     _line(pdf, " | ".join(str(c) for c in headers))
     pdf.set_font("Helvetica", size=9)
     for row in rows:
-        _line(pdf, " | ".join("" if v is None else str(v) for v in row))
+        _line(pdf, " | ".join(_num(v) for v in row))
 
 
 def _heading(pdf: FPDF, title: str) -> None:
@@ -215,5 +216,50 @@ def _line(pdf: FPDF, text: str) -> None:
     pdf.cell(usable, 5, safe, new_x="LMARGIN", new_y="NEXT")
 
 
+# Helvetica estándar solo cubre Latin-1: se transliteran los símbolos usuales de las fórmulas.
+_SYMBOLS = str.maketrans(
+    {
+        "λ": "lambda",
+        "μ": "mu",
+        "ρ": "rho",
+        "σ": "sigma",
+        "π": "pi",
+        "Σ": "Suma",
+        "∫": "Int",
+        "≤": "<=",
+        "≥": ">=",
+        "⇔": "<=>",
+        "∞": "infinito",
+        "−": "-",
+        "–": "-",
+        "—": "-",
+        "…": "...",
+        "₀": "0",
+        "ⁿ": "^n",
+        "√": "raiz",
+    }
+)
+
+
+def _variables_mirror_metrics(result: ModuleResult) -> bool:
+    """Algunos módulos (p. ej. colas) repiten las métricas como variables; no se listan dos veces."""
+    metrics = result.solution.metrics or {}
+    return all(metrics.get(k) == v for k, v in result.solution.variables.items())
+
+
 def _safe(text: str) -> str:
-    return text.encode("latin-1", "replace").decode("latin-1")
+    return text.translate(_SYMBOLS).encode("latin-1", "replace").decode("latin-1")
+
+
+def _num(value: Any) -> str:
+    """Números legibles en el reporte: hasta 4 decimales, sin colas de punto flotante."""
+    if value is None:
+        return ""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return str(value)
+    if math.isnan(value):
+        return "NaN"
+    if math.isinf(value):
+        return "infinito" if value > 0 else "-infinito"
+    rounded = round(float(value), 4) + 0.0
+    return str(int(rounded)) if rounded.is_integer() and abs(rounded) < 1e15 else f"{rounded:.4f}".rstrip("0").rstrip(".")
