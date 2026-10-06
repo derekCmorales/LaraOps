@@ -2,8 +2,26 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ModuleResult } from "../schema";
 import { labelColumns, labelKey, labelTableName } from "./labels";
 
+const PDF_CHARS: Record<string, string> = {
+  "≤": "<=",
+  "≥": ">=",
+  "∞": "inf",
+  "←": "<-",
+  "→": "->",
+  "−": "-",
+  "–": "-",
+  "—": "-",
+  "∩": "y",
+  "⁺": "+",
+  "⁻": "-",
+  "«": "\"",
+  "»": "\"",
+};
+
 function safe(text: string): string {
-  return text.replace(/[^\x09\x0A\x0D\x20-\x7EÀ-ÿ]/g, "?");
+  return text
+    .replace(/[≤≥∞←→−–—∩⁺⁻«»]/g, (ch) => PDF_CHARS[ch] ?? "?")
+    .replace(/[^\x09\x0A\x0D\x20-\x7EÀ-ÿ¡-¿]/g, "?");
 }
 
 /** Números legibles en el reporte: hasta 4 decimales, sin colas de punto flotante. */
@@ -97,7 +115,7 @@ export async function moduleResultToPdf(result: ModuleResult): Promise<Uint8Arra
     if (last.tableau?.length) {
       draw("Tableau final (óptimo)", true, 9);
       for (const row of last.tableau.slice(0, 20)) {
-        draw(row.map((v) => (v == null ? "" : String(v))).join(" | "), false, 8);
+        draw(row.map(num).join(" | "), false, 8);
       }
     }
   }

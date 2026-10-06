@@ -417,6 +417,7 @@ export default function SpreadsheetEditor({ matrix, onChange, height = 280, kind
           onCellEditingStopped={onCellEditingStopped}
           processDataFromClipboard={processDataFromClipboard}
           localeText={LOCALE_ES}
+          theme="legacy"
           singleClickEdit
           stopEditingWhenCellsLoseFocus
           enterNavigatesVertically

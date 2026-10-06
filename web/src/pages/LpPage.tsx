@@ -33,6 +33,13 @@ type LpOptions = {
   include_graph: boolean;
 };
 
+type LpMethod = "big_m" | "two_phase";
+
+const METHODS: { value: LpMethod; label: string; hint: string }[] = [
+  { value: "big_m", label: "Gran M", hint: "Las artificiales entran a Z con costo M muy grande." },
+  { value: "two_phase", label: "Dos fases", hint: "Fase I minimiza la suma de artificiales; Fase II optimiza Z." },
+];
+
 export default function LpPage() {
   const [matrix, setMatrix] = useState<SheetMatrix>(() => emptyLpSheet(2, 3));
   const [options, setOptions] = useState<LpOptions>({
@@ -40,6 +47,7 @@ export default function LpPage() {
     include_sensitivity: true,
     include_graph: true,
   });
+  const [method, setMethod] = useState<LpMethod>("big_m");
   const [picked, setPicked] = useState<string[] | null>(null);
   const varNames = sheetVarNames(matrix);
   const selected = (picked ?? varNames.slice(0, 3)).filter((name) => varNames.includes(name));
@@ -48,7 +56,7 @@ export default function LpPage() {
     const body = sheetToLp(matrix);
     const graph_variables =
       varNames.length >= 3 && selected.length >= 2 && selected.length <= 3 ? selected : undefined;
-    return { ...body, ...options, ...(graph_variables ? { graph_variables } : {}) };
+    return { ...body, ...options, method, ...(graph_variables ? { graph_variables } : {}) };
   }
 
   function toggleGraphVar(name: string) {
@@ -68,7 +76,7 @@ export default function LpPage() {
     <ModuleWorkbench
       group="Optimización"
       title="Programación lineal"
-      blurb="Fila 1: nombres de variables. Fila 2: objetivo Z. Resto: restricciones con Sentido y LD. Tras resolver verás Solución, Sensibilidad, Iteraciones simplex y el Gráfico: plano con 2 variables, poliedro con 3, o un corte por el óptimo si hay más. Pega bloques desde Excel con Ctrl+V."
+      blurb="Fila 1: nombres de variables. Fila 2: objetivo Z. Resto: restricciones con Sentido y LD. Tras resolver verás la Solución, las tablas del simplex (Gran M o dos fases), la Sensibilidad con la regla del 100 %, el Dual, el método algebraico y el Gráfico: plano con 2 variables, poliedro con 3, o un corte por el óptimo si hay más. Pega bloques desde Excel con Ctrl+V."
       matrix={matrix}
       onMatrixChange={setMatrix}
       buildBody={buildBody}
@@ -80,10 +88,28 @@ export default function LpPage() {
       sheetHeight={300}
       sheetKind="lp"
       onLoadExample={() => setMatrix(lpToSheet(EXAMPLE))}
-      onImportBody={(body) => setMatrix(lpToSheet(body as LpBody))}
+      onImportBody={(body) => {
+        setMatrix(lpToSheet(body as LpBody));
+        const m = (body as { method?: string }).method;
+        if (m === "big_m" || m === "two_phase") setMethod(m);
+      }}
       toolbar={
         <fieldset className="lp-options">
           <legend className="section-label">Opciones de reporte</legend>
+          <div className="lp-method" role="radiogroup" aria-label="Método para restricciones ≥ e =">
+            <span className="lp-method-label">Restricciones ≥ e =:</span>
+            {METHODS.map((m) => (
+              <label key={m.value} className="check-inline" title={m.hint}>
+                <input
+                  type="radio"
+                  name="lp-method"
+                  checked={method === m.value}
+                  onChange={() => setMethod(m.value)}
+                />
+                {m.label}
+              </label>
+            ))}
+          </div>
           <label className="check-inline">
             <input
               type="checkbox"

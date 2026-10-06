@@ -21,6 +21,10 @@ export type LPRequest = {
   include_iterations?: boolean;
   include_sensitivity?: boolean;
   include_graph?: boolean;
+  /** Cómo se tratan las restricciones >= e =: Gran M (por defecto) o dos fases. */
+  method?: "big_m" | "two_phase";
+  include_dual?: boolean;
+  include_basic_solutions?: boolean;
 };
 
 function asRecord(body: unknown): Record<string, unknown> {
@@ -33,19 +37,19 @@ function asRecord(body: unknown): Record<string, unknown> {
 function numMap(v: unknown): Record<string, number> {
   if (!v || typeof v !== "object" || Array.isArray(v)) return {};
   const out: Record<string, number> = {};
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = Number(val) || 0;
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) out[k] = val == null || val === "" ? 0 : Number(val);
   return out;
 }
 
 export function parseLpRequest(body: unknown): LPRequest {
   const o = asRecord(body);
   const sense = o.sense === "min" ? "min" : o.sense === "max" ? "max" : null;
-  if (!sense) throw new SolverError("sense debe ser min o max");
+  if (!sense) throw new SolverError("Indica si el objetivo es maximizar (max) o minimizar (min).");
   const constraintsRaw = Array.isArray(o.constraints) ? o.constraints : [];
   const constraints: LPConstraint[] = constraintsRaw.map((c, i) => {
     const row = asRecord(c);
     const s = row.sense;
-    if (s !== "<=" && s !== ">=" && s !== "=") throw new SolverError(`restricción ${i}: sense inválido`);
+    if (s !== "<=" && s !== ">=" && s !== "=") throw new SolverError(`La restricción ${i + 1} tiene un sentido inválido: usa <=, >= o =.`);
     return {
       id: String(row.id ?? `c${i + 1}`),
       coeffs: numMap(row.coeffs),
@@ -63,7 +67,22 @@ export function parseLpRequest(body: unknown): LPRequest {
     include_iterations: o.include_iterations !== false,
     include_sensitivity: o.include_sensitivity !== false,
     include_graph: o.include_graph !== false,
+    method: o.method === "two_phase" ? "two_phase" : "big_m",
+    include_dual: o.include_dual !== false,
+    include_basic_solutions: o.include_basic_solutions !== false,
   };
+  for (const [i, c] of constraints.entries()) {
+    if (!Number.isFinite(c.rhs)) throw new SolverError(`La restricción ${c.id || i + 1} necesita un lado derecho numérico.`);
+    for (const [v, a] of Object.entries(c.coeffs)) {
+      if (!Number.isFinite(a)) throw new SolverError(`El coeficiente de ${v} en ${c.id} no es un número.`);
+    }
+  }
+  const ids = constraints.map((c) => c.id);
+  const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+  if (dup) throw new SolverError(`Hay dos restricciones con el nombre «${dup}». Usa nombres distintos.`);
+  if (req.objective && Object.values(req.objective).some((v) => !Number.isFinite(v))) {
+    throw new SolverError("Los coeficientes de la función objetivo deben ser números.");
+  }
   const n = collectVarNames(req).length;
   assertLimit(n <= LIMITS.lpVars, `LP limitado a ${LIMITS.lpVars} variables en el plan Free`);
   assertLimit(

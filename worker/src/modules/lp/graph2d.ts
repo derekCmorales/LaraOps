@@ -15,7 +15,7 @@ type Vertex = { x: number; y: number; sources: string[] };
 export function build2dGraph(
   req: LPRequest,
   xStar: Record<string, number>,
-  zStar: number,
+  zStar: number | null,
   zOffset = 0,
 ): GraphXY | null {
   const names = collectVarNames(req);
@@ -69,8 +69,8 @@ export function build2dGraph(
       equation: fmtEquation(plane.a, plane.b, plane.rhs, xName, yName),
     });
   }
-  const zLine = clipLineToBox(c1, c2, zStar, 0, 0, xMax, yMax);
-  if (zLine.length >= 2) {
+  const zLine = zStar == null ? [] : clipLineToBox(c1, c2, zStar, 0, 0, xMax, yMax);
+  if (zStar != null && zLine.length >= 2) {
     series.push({
       name: "objective_level",
       x: zLine.map((p) => clean(p[0])),
@@ -92,6 +92,20 @@ export function build2dGraph(
         sources: v.sources,
       })),
     });
+  }
+  if (zStar == null) {
+    const empty = fillPoly.length < 3 && !labeled.length;
+    return {
+      type: "xy",
+      kind: "lp2d",
+      series,
+      x_label: xName,
+      y_label: yName,
+      title: empty ? "Restricciones: no hay región factible" : "Región factible sin óptimo finito",
+      subtitle: empty
+        ? "Ningún punto cumple todas las restricciones a la vez (problema infactible)."
+        : "La región no está acotada en la dirección en que mejora Z (problema no acotado).",
+    };
   }
   series.push({
     name: "optimum",
