@@ -159,15 +159,28 @@ describe("networks", () => {
     assertClose(result.solution.metrics.total_cost, (data.expect as { total_cost: number }).total_cost);
   });
 
-  it("unbalanced transshipment raises", () => {
+  it("transbordo con oferta mayor que la demanda usa un destino ficticio", () => {
+    const result = solve({
+      problem: "transshipment",
+      nodes: ["A", "B"],
+      node_supply: { A: 10, B: -5 },
+      edges: [{ source: "A", target: "B", weight: 1 }],
+    });
+    expect(result.status).toBe("ok");
+    expect(result.solution.metrics.total_cost).toBe(5);
+    expect(result.warnings.some((w) => w.includes("ficticio"))).toBe(true);
+    expect(result.tables?.find((t) => t.name === "oferta_sin_enviar")?.rows).toEqual([["A", 5]]);
+  });
+
+  it("transbordo con demanda mayor que la oferta explica el problema", () => {
     expect(() =>
       solve({
         problem: "transshipment",
         nodes: ["A", "B"],
-        node_supply: { A: 10, B: -5 },
+        node_supply: { A: 5, B: -10 },
         edges: [{ source: "A", target: "B", weight: 1 }],
       }),
-    ).toThrow(SolverError);
+    ).toThrow(/demanda total/);
   });
 
   it("tsp exact", () => {

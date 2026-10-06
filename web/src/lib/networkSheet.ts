@@ -57,7 +57,8 @@ export function writeCell(m: Matrix, row: number, col: number, value: number | n
 export function matrixFromEdges(
   nodes: string[],
   edges: { source: string; target: string; weight?: number | null; capacity?: number | null }[],
-  field: "weight" | "capacity",
+  /** "capacity_only": sin capacidad = sin límite (no se toma el costo como capacidad). */
+  field: "weight" | "capacity" | "capacity_only",
   symmetric: boolean,
   diagonal: number | null = null,
 ): Matrix {
@@ -67,10 +68,11 @@ export function matrixFromEdges(
     const i = index.get(edge.source);
     const j = index.get(edge.target);
     if (i == null || j == null || i === j) continue;
-    const raw = field === "capacity" ? (edge.capacity ?? edge.weight) : edge.weight;
+    const raw =
+      field === "capacity" ? (edge.capacity ?? edge.weight) : field === "capacity_only" ? edge.capacity : edge.weight;
     if (raw == null || !Number.isFinite(Number(raw))) continue;
     const value = Number(raw);
-    if (field === "capacity") {
+    if (field !== "weight") {
       m[i][j] = (m[i][j] ?? 0) + value;
     } else {
       m[i][j] = m[i][j] == null ? value : Math.min(m[i][j]!, value);

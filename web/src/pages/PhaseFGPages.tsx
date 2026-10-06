@@ -664,7 +664,7 @@ function matrixHint(problem: string): string {
     return "Capacidad del arco fila → columna. Vacío = ese arco no existe.";
   }
   if (problem === "transshipment") {
-    return "Costo unitario del arco fila → columna. En Oferta: positivo es oferta, negativo es demanda y 0 es transbordo.";
+    return "Costo unitario del arco fila → columna. En Oferta: positivo es oferta, negativo es demanda y 0 es transbordo. Se resuelve con el método simplex de redes.";
   }
   if (problem === "tsp") {
     return "Distancia entre ciudades. La diagonal es 0. El resto de las casillas es obligatorio.";
@@ -689,7 +689,7 @@ function applyNetworkExample(ex: NetworkExample) {
   return {
     nodes,
     weights,
-    capacities: hasCap ? matrixFromEdges(nodes, ex.edges, "capacity", false, null) : resizeNullable([], nodes.length, null),
+    capacities: hasCap ? matrixFromEdges(nodes, ex.edges, "capacity_only", false, null) : resizeNullable([], nodes.length, null),
     useCapacity: hasCap,
     supply: nodes.map((n) => ex.node_supply?.[n] ?? 0),
     source: nodes.includes(ex.source) ? ex.source : nodes[0] ?? "",
@@ -870,7 +870,7 @@ export function NetworksPage() {
         setNodes(nodesNext);
         setWeights(weightsNext);
         setCapacities(
-          hasCap && b.edges ? matrixFromEdges(nodesNext, b.edges, "capacity", false, null) : resizeNullable([], nodesNext.length, null),
+          hasCap && b.edges ? matrixFromEdges(nodesNext, b.edges, "capacity_only", false, null) : resizeNullable([], nodesNext.length, null),
         );
         setUseCapacity(hasCap);
         setSupply(nodesNext.map((n) => b.node_supply?.[n] ?? 0));
@@ -892,7 +892,7 @@ export function NetworksPage() {
               { value: "shortest_path", label: "Ruta más corta" },
               { value: "mst", label: "Árbol de expansión mínima" },
               { value: "max_flow", label: "Flujo máximo" },
-              { value: "transshipment", label: "Transbordo" },
+              { value: "transshipment", label: "Flujo de costo mínimo (transbordo)" },
               { value: "tsp", label: "Agente viajante (TSP)" },
             ]}
           />
@@ -1010,9 +1010,13 @@ export function NetworksPage() {
           linkCount={countLinks(weights, upperOnly)}
         />
         {isTrans && (
-          <p className={Math.abs(supplySum) < 1e-6 ? "field-hint" : "error-inline"}>
+          <p className={supplySum > -1e-6 ? "field-hint" : "error-inline"}>
             Suma de oferta y demanda: {supplySum.toLocaleString("es-MX", { maximumFractionDigits: 4 })}
-            {Math.abs(supplySum) < 1e-6 ? " · balanceada" : " · debe sumar 0"}
+            {Math.abs(supplySum) < 1e-6
+              ? " · balanceada"
+              : supplySum > 0
+                ? " · sobra oferta: se agrega un destino ficticio con costo 0"
+                : " · la demanda supera a la oferta: no se puede atender a todos"}
           </p>
         )}
         {isTrans && useCapacity && (

@@ -104,11 +104,20 @@ function metricsCopyVariables(result: ModuleResult): boolean {
   return metricKeys.every((k) => vars[k] === metrics[k]);
 }
 
-const NETWORK_TABLES = new Set(["ruta", "aristas_mst", "flows", "min_cut", "recorrido"]);
+const NETWORK_TABLES = new Set([
+  "ruta",
+  "distancias",
+  "aristas_mst",
+  "flows",
+  "balance_nodos",
+  "oferta_sin_enviar",
+  "min_cut",
+  "recorrido",
+]);
 
 function nodeTextColumns(columns: string[]): number[] {
   return columns
-    .map((column, index) => (/^(origen|destino|nodo)$/i.test(column) ? index : -1))
+    .map((column, index) => (/^(origen|destino|nodo|tipo|llega_desde|ruta_desde_origen)$/i.test(column) ? index : -1))
     .filter((index) => index >= 0);
 }
 
