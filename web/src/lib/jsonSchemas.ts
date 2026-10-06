@@ -17,7 +17,10 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
       sense: "max",
       objective: { x1: 3, x2: 2 },
       constraints: [{ id: "R1", coeffs: { x1: 2, x2: 1 }, sense: "<=", rhs: 10 }],
+      method: "big_m",
     },
+    notes:
+      "constraints.sense: <=, >= o =. method (opcional): big_m (Gran M) o two_phase (dos fases). bounds (opcional): { x1: [mínimo, máximo] } con mínimo ≥ 0.",
   },
   assignment: {
     module: "assignment",
