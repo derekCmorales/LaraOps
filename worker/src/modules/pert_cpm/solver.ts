@@ -255,6 +255,46 @@ export function solve(body: unknown): ModuleResult {
   }
   if (req.crash) {
     tables.push({
+      name: "costos_aceleracion",
+      columns: ["actividad", "tiempo_normal", "tiempo_intensivo", "costo_normal", "costo_intensivo", "costo_por_unidad", "reduccion_maxima", "reduccion_usada"],
+      rows: order.map((aid) => {
+        const a = acts.get(aid)!;
+        const normal = a.duration ?? duration[aid];
+        const crashT = a.crash_time ?? normal;
+        const slope = crashSlope(a, normal);
+        return [
+          aid,
+          normal,
+          crashT,
+          a.normal_cost ?? "—",
+          a.crash_cost ?? "—",
+          slope ?? "—",
+          normal - crashT,
+          normal - duration[aid],
+        ];
+      }),
+    });
+    const normalSum = req.activities.reduce((sum, a) => sum + (a.normal_cost ?? 0), 0);
+    let acc = 0;
+    const curve: unknown[][] = [[0, crashSteps[0]?.meta.project_duration_before ?? projectDuration, "—", 0, 0, 0, normalSum]];
+    for (const step of crashSteps) {
+      acc += Number(step.meta.cost_increment ?? 0);
+      curve.push([
+        step.index,
+        Number(step.meta.project_duration_before) - Number(step.meta.amount),
+        String(step.meta.activity),
+        step.meta.amount,
+        step.meta.cost_increment,
+        acc,
+        normalSum + acc,
+      ]);
+    }
+    tables.push({
+      name: "curva_tiempo_costo",
+      columns: ["paso", "duracion", "acelerar", "recorte", "costo_del_paso", "costo_acumulado", "costo_total"],
+      rows: curve,
+    });
+    tables.push({
       name: "durations_after_crash",
       columns: ["actividad", "normal", "acelerada", "recorte"],
       rows: order.map((aid) => {
@@ -382,7 +422,7 @@ function crashProject(
       if (duration[aid] - (a.crash_time ?? duration[aid]) <= 1e-12) continue;
       slopes.set(aid, slope);
     }
-    const cut = cheapestCriticalCut(acts, sched.critical, sched.successors, slopes);
+    const cut = cheapestCriticalCut(acts, sched, slopes);
     if (!cut) {
       warnings.push(
         `No se puede llegar a la duración objetivo ${fmtQty(target)}. La menor duración alcanzable es ${fmtQty(t)}.`,
@@ -434,10 +474,12 @@ function crashProject(
 /** Corte de costo mínimo que cruza todas las rutas críticas (actividades como arcos). */
 function cheapestCriticalCut(
   acts: Map<string, Activity>,
-  critical: Record<string, boolean>,
-  successors: Record<string, string[]>,
+  sched: ReturnType<typeof schedule>,
   slopes: Map<string, number>,
 ): string[] | null {
+  const { critical, es, ef, project_duration: total } = sched;
+  // Solo cuentan los arcos de una ruta crítica: el sucesor empieza justo cuando termina el predecesor.
+  const tight = (p: string, id: string) => Math.abs(ef[p] - es[id]) <= 1e-9;
   const crit = [...acts.keys()].filter((id) => critical[id]);
   if (!crit.length) return null;
   const critSet = new Set(crit);
@@ -461,11 +503,10 @@ function cheapestCriticalCut(
   for (const id of crit) {
     const slope = slopes.get(id);
     addEdge(`${id}#in`, `${id}#out`, slope == null ? INF : Math.max(0, slope));
-    const preds = acts.get(id)!.predecessors.filter((p) => critSet.has(p));
-    if (!preds.length) addEdge(S, `${id}#in`, INF);
+    const preds = acts.get(id)!.predecessors.filter((p) => critSet.has(p) && tight(p, id));
+    if (Math.abs(es[id]) <= 1e-9) addEdge(S, `${id}#in`, INF);
     for (const p of preds) addEdge(`${p}#out`, `${id}#in`, INF);
-    const succs = (successors[id] ?? []).filter((s) => critSet.has(s));
-    if (!succs.length) addEdge(`${id}#out`, T, INF);
+    if (Math.abs(ef[id] - total) <= 1e-9) addEdge(`${id}#out`, T, INF);
   }
   const flow = maxFlow(graph, S, T);
   if (flow >= INF / 10) return null;

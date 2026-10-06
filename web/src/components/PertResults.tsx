@@ -18,6 +18,8 @@ export default function PertResults({ result }: { result: ModuleResult }) {
   const pathTable = result.tables?.find((table) => table.name === "critical_path");
   const schedule = result.tables?.find((table) => table.name === "schedule");
   const crashTable = result.tables?.find((table) => table.name === "durations_after_crash");
+  const costTable = result.tables?.find((table) => table.name === "costos_aceleracion");
+  const curveTable = result.tables?.find((table) => table.name === "curva_tiempo_costo");
   const path = pathTable?.rows.map((row) => String(row[1])).filter(Boolean) ?? [];
   const missed =
     result.status === "infeasible" ||
@@ -94,6 +96,22 @@ export default function PertResults({ result }: { result: ModuleResult }) {
           columns={labelColumns(schedule.columns)}
           rows={schedule.rows as (string | number | boolean | null)[][]}
           textColumns={[0]}
+        />
+      )}
+      {costTable && (
+        <SolutionTable
+          caption="Costos y tiempos normales e intensivos"
+          columns={labelColumns(costTable.columns)}
+          rows={costTable.rows as (string | number | boolean | null)[][]}
+          textColumns={[0]}
+        />
+      )}
+      {curveTable && curveTable.rows.length > 1 && (
+        <SolutionTable
+          caption="Curva tiempo-costo: cada paso acelera el corte más barato de la ruta crítica"
+          columns={labelColumns(curveTable.columns)}
+          rows={curveTable.rows as (string | number | boolean | null)[][]}
+          textColumns={[2]}
         />
       )}
       {crashTable && (

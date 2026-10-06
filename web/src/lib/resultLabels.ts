@@ -13,6 +13,20 @@ const LABELS: Record<string, string> = {
   objective_value: "Valor objetivo (Z)",
   objective_sense: "Sentido del objetivo",
 
+  // PERT/CPM aceleración
+  costos_aceleracion: "Costos y tiempos normales e intensivos",
+  curva_tiempo_costo: "Curva tiempo-costo de la aceleración",
+  tiempo_normal: "Tiempo normal",
+  tiempo_intensivo: "Tiempo intensivo (crash)",
+  costo_normal: "Costo normal",
+  costo_intensivo: "Costo intensivo (crash)",
+  costo_por_unidad: "Costo por unidad de tiempo",
+  reduccion_maxima: "Reducción máxima",
+  reduccion_usada: "Reducción usada",
+  paso: "Paso",
+  acelerar: "Actividades aceleradas",
+  costo_del_paso: "Costo del paso",
+  costo_acumulado: "Costo extra acumulado",
   // LP / sensibilidad
   forma_estandar: "Forma estándar",
   modelo: "Modelo",
