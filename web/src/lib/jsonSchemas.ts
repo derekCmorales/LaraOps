@@ -72,7 +72,9 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
       payoff: [[0]],
       probabilities: [1],
     },
-    notes: "mode: payoff_table, decision_tree, bayes",
+    notes:
+      "mode: payoff_table, utility, decision_tree, bayes. utility: {kind: linear|exponential|table, risk_tolerance}. " +
+      "bayes admite sample_cost. El árbol usa tree y root_id.",
   },
   game: {
     module: "game_theory",
@@ -133,8 +135,11 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
   markov: {
     module: "markov",
     title: "Cadenas de Markov",
-    required: ["states", "transition", "steps"],
+    required: ["states"],
     example: { states: ["A", "B"], transition: [[0.7, 0.3], [0.4, 0.6]], initial: [1, 0], steps: 5 },
+    notes:
+      "Cadena: transition (filas suman 1), initial, steps, n_power, rewards. " +
+      "Decisión markoviana: mode \"mdp\", decisions [{state, action, cost, transitions}], sense min|max, criterion average|discounted y discount.",
   },
   goal: {
     module: "goal_programming",
@@ -279,6 +284,11 @@ export function validateModuleJson(slug: string, body: unknown): string | null {
   }
   if (slug === "decision" && obj.mode === "payoff_table") {
     if (!Array.isArray(obj.payoff)) return "En tabla de pagos, «payoff» debe ser una matriz.";
+  }
+  if (slug === "markov" && obj.mode === "mdp") {
+    if (!Array.isArray(obj.decisions)) return "En una decisión markoviana, «decisions» debe ser un arreglo.";
+  } else if (slug === "markov" && !Array.isArray(obj.transition)) {
+    return "Falta la matriz «transition».";
   }
   return null;
 }

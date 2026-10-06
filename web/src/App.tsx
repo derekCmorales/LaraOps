@@ -7,6 +7,9 @@ import AssignmentPage from "./pages/AssignmentPage";
 import EoqPage from "./pages/EoqPage";
 import LpPage from "./pages/LpPage";
 import PertCpmPage from "./pages/PertCpmPage";
+import DecisionPage from "./pages/DecisionPage";
+import GamePage from "./pages/GamePage";
+import MarkovPage from "./pages/MarkovPage";
 import MonteCarloPage from "./pages/MonteCarloPage";
 import QssPage from "./pages/QssPage";
 import QueuesPage from "./pages/QueuesPage";
@@ -14,16 +17,13 @@ import {
   AggregatePage,
   AsaPage,
   BreakevenPage,
-  DecisionPage,
   DpPage,
   FacilityPage,
   ForecastingPage,
-  GamePage,
   GoalPage,
   IlpPage,
   InventoryPage,
   JobsPage,
-  MarkovPage,
   MrpPage,
   NetworksPage,
   NlpPage,
