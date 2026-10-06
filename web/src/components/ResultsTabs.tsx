@@ -12,6 +12,7 @@ import ChartViews from "./ChartViews";
 import PertResults from "./PertResults";
 import EoqResults, { EoqInventoryChart } from "./EoqResults";
 import AssignmentResults, { AssignmentDiagram, HungarianSteps } from "./AssignmentResults";
+import QueuesResults, { QueuesCharts, QueuesFormulas } from "./QueuesResults";
 import TransportIterations from "./TransportIterations";
 import TransportResults, { TransportFlowMap, TransportSensitivity } from "./TransportResults";
 import Explainer from "./Explainer";
@@ -22,6 +23,12 @@ import JsonTable from "./JsonTable";
 import { HundredPercentRule, LpAlgebraicPane, LpDualPane, LpIterations, LpSolutionPane } from "./LpResults";
 
 type Props = { result: ModuleResult };
+
+/** En colas no hay "óptimo": el estado relevante es si el sistema es estable. */
+function queuesStatus(result: ModuleResult): string {
+  const L = result.solution.metrics.L;
+  return typeof L === "number" && Number.isFinite(L) ? "Sistema estable" : "Sistema inestable";
+}
 
 function vertexTextColumns(columns: string[]): number[] {
   const idx = columns
@@ -194,6 +201,7 @@ export default function ResultsTabs({ result }: Props) {
   const panes = useMemo(() => {
     const isLp = result.module === "linear_programming";
     const isTransport = result.module === "transport";
+    const isQueues = result.module === "queues";
     const list: { id: string; label: string; content: ReactNode }[] = [
       {
         id: "solution",
@@ -207,6 +215,8 @@ export default function ResultsTabs({ result }: Props) {
             <AssignmentResults result={result} />
           ) : isTransport ? (
             <TransportResults result={result} />
+          ) : isQueues ? (
+            <QueuesResults result={result} />
           ) : isLp ? (
             <LpSolutionPane result={result} />
           ) : (
@@ -253,7 +263,10 @@ export default function ResultsTabs({ result }: Props) {
     if (isLp && result.tables?.some((t) => t.name === "soluciones_basicas")) {
       list.push({ id: "algebraic", label: "Método algebraico", content: <LpAlgebraicPane result={result} /> });
     }
-    if (result.graph) {
+    if (isQueues) {
+      list.push({ id: "formulas", label: "Fórmulas", content: <QueuesFormulas result={result} /> });
+      list.push({ id: "graph", label: "Gráficos", content: <QueuesCharts result={result} /> });
+    } else if (result.graph) {
       list.push({
         id: "graph",
         label: result.module === "eoq" ? "Gráficos" : "Gráfico",
@@ -275,8 +288,8 @@ export default function ResultsTabs({ result }: Props) {
           ),
       });
     }
-    // Transporte y PL ya muestran sus tablas en otras pestañas; no se repiten.
-    if (result.tables?.length && !isTransport && !isLp) {
+    // Transporte, PL y colas ya muestran sus tablas en sus propias vistas; no se repiten.
+    if (result.tables?.length && !isTransport && !isLp && !isQueues) {
       list.push({
         id: "tables",
         label: "Tablas",
@@ -308,6 +321,7 @@ export default function ResultsTabs({ result }: Props) {
     <section aria-live="polite">
       <StatusBand
         status={result.status}
+        statusText={result.module === "queues" ? queuesStatus(result) : undefined}
         objectiveValue={result.solution.objective_value}
         objectiveSense={result.solution.objective_sense}
         warnings={result.warnings}

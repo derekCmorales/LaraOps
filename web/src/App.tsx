@@ -7,6 +7,7 @@ import AssignmentPage from "./pages/AssignmentPage";
 import EoqPage from "./pages/EoqPage";
 import LpPage from "./pages/LpPage";
 import PertCpmPage from "./pages/PertCpmPage";
+import QueuesPage from "./pages/QueuesPage";
 import {
   AggregatePage,
   AsaPage,
@@ -27,7 +28,6 @@ import {
   QpPage,
   QssPage,
   QualityPage,
-  QueuesPage,
   StatisticsPage,
 } from "./pages/PhaseFGPages";
 import TransportPage from "./pages/TransportPage";

@@ -6,6 +6,8 @@ type Props = {
   objectiveSense?: string | null;
   warnings?: string[];
   valueLabel?: string;
+  /** Texto propio del módulo en lugar de la etiqueta genérica del estado. */
+  statusText?: string;
 };
 
 function toneFor(status: string, warnings: string[]): "ok" | "warn" | "error" {
@@ -31,6 +33,7 @@ export default function StatusBand({
   objectiveSense,
   warnings = [],
   valueLabel = "Z",
+  statusText,
 }: Props) {
   const tone = toneFor(status, warnings);
   const sense = senseLabel(objectiveSense);
@@ -39,7 +42,7 @@ export default function StatusBand({
     <div className="status-band" data-tone={tone} aria-live="polite">
       <div className="status-band-label">
         <span className="status-dot" aria-hidden />
-        {statusLabel(status)}
+        {statusText ?? statusLabel(status)}
         {warnings[0] ? (
           <span className="status-band-warn" title={warnings.join(" · ")}>
             · {warnings[0]}

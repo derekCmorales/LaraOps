@@ -16,8 +16,6 @@ import {
   exportNetworksPdf,
   exportNetworksXlsx,
   exportQualityXlsx,
-  exportQueuesPdf,
-  exportQueuesXlsx,
   exportStatisticsPdf,
   exportStatisticsXlsx,
   exportAggregateXlsx,
@@ -47,7 +45,6 @@ import {
   solveQp,
   solveQss,
   solveQuality,
-  solveQueues,
   solveStatistics,
 } from "../api/client";
 import FormModulePage from "../components/FormModulePage";
@@ -118,8 +115,6 @@ import {
   QP_EX,
   QSS_EMPTY,
   QSS_EX,
-  QUEUES_EMPTY,
-  QUEUES_EX,
   STAT_EMPTY,
   STAT_EX,
 } from "../lib/moduleDefaults";
@@ -133,129 +128,6 @@ function resizeMatrix(m: number[][], rows: number, cols: number, fill = 0): numb
 
 function resizeList(list: number[], n: number, fill = 0): number[] {
   return Array.from({ length: n }, (_, i) => list[i] ?? fill);
-}
-
-/* ——— Colas ——— */
-
-export function QueuesPage() {
-  const [model, setModel] = useState(QUEUES_EMPTY.model);
-  const [lambda, setLambda] = useState(QUEUES_EMPTY.lambda);
-  const [mu, setMu] = useState(QUEUES_EMPTY.mu);
-  const [s, setS] = useState(QUEUES_EMPTY.s);
-  const [sigma, setSigma] = useState(QUEUES_EMPTY.service_std_dev);
-  const [K, setK] = useState(0);
-  const [N, setN] = useState(0);
-  const [costWait, setCostWait] = useState(0);
-  const [costServer, setCostServer] = useState(0);
-  const [optimizeS, setOptimizeS] = useState(false);
-  const [sMax, setSMax] = useState(5);
-
-  return (
-    <FormModulePage
-      group="Aleatoriedad y espera"
-      title="Teoría de colas"
-      blurb="Elige el modelo, captura λ y μ, y resuelve. Incluye costos y optimización de servidores cuando aplica."
-      filenameBase="queues"
-      schemaSlug="queues"
-      exportPdf={exportQueuesPdf}
-      buildBody={() => ({
-        model,
-        lambda,
-        mu,
-        s: model.includes("/s") ? s : undefined,
-        K: model.includes("/K") ? K || undefined : undefined,
-        N: model.includes("/N") ? N || undefined : undefined,
-        service_std_dev: model === "M/G/1" ? sigma : undefined,
-        include_pn: true,
-        cost_waiting_per_unit_time: costWait > 0 ? costWait : undefined,
-        cost_server_per_unit_time: costServer > 0 ? costServer : undefined,
-        optimize_s: optimizeS,
-        s_max: optimizeS ? sMax : undefined,
-      })}
-      solve={solveQueues}
-      exportXlsx={exportQueuesXlsx}
-      onLoadExample={() => {
-        setModel(QUEUES_EX.model);
-        setLambda(QUEUES_EX.lambda);
-        setMu(QUEUES_EX.mu);
-        setS(QUEUES_EX.s);
-        setSigma(QUEUES_EX.service_std_dev);
-        setK(0);
-        setN(0);
-        setCostWait(0);
-        setCostServer(0);
-        setOptimizeS(false);
-        setSMax(5);
-      }}
-      onImportBody={(body) => {
-        const b = body as typeof QUEUES_EX & {
-          lambda_?: number;
-          K?: number;
-          N?: number;
-          cost_waiting_per_unit_time?: number;
-          cost_server_per_unit_time?: number;
-          optimize_s?: boolean;
-          s_max?: number;
-        };
-        if (b.model) setModel(b.model);
-        if (b.lambda != null) setLambda(b.lambda);
-        if (b.lambda_ != null) setLambda(b.lambda_);
-        if (b.mu != null) setMu(b.mu);
-        if (b.s != null) setS(b.s);
-        if (b.service_std_dev != null) setSigma(b.service_std_dev);
-        if (b.K != null) setK(b.K);
-        if (b.N != null) setN(b.N);
-        if (b.cost_waiting_per_unit_time != null) setCostWait(b.cost_waiting_per_unit_time);
-        if (b.cost_server_per_unit_time != null) setCostServer(b.cost_server_per_unit_time);
-        if (b.optimize_s != null) setOptimizeS(b.optimize_s);
-        if (b.s_max != null) setSMax(b.s_max);
-      }}
-    >
-      <Section title="Parámetros">
-        <FieldGrid>
-          <SelectField
-            label="Modelo"
-            value={model}
-            onChange={setModel}
-            options={[
-              { value: "M/M/1", label: "M/M/1" },
-              { value: "M/M/s", label: "M/M/s" },
-              { value: "M/M/1/K", label: "M/M/1/K (capacidad finita)" },
-              { value: "M/M/s/K", label: "M/M/s/K" },
-              { value: "M/M/s/N", label: "M/M/s/N (población finita)" },
-              { value: "M/G/1", label: "M/G/1" },
-              { value: "M/D/1", label: "M/D/1" },
-            ]}
-          />
-          <NumberField label="λ (llegadas)" value={lambda} onChange={setLambda} min={0} />
-          <NumberField label="μ (servicio)" value={mu} onChange={setMu} min={0} />
-          {model.includes("/s") && <NumberField label="Servidores (s)" value={s} onChange={setS} min={1} />}
-          {model.includes("/K") && (
-            <NumberField label="Capacidad del sistema (K)" value={K} onChange={setK} min={1} />
-          )}
-          {model.includes("/N") && (
-            <NumberField label="Población (N)" value={N} onChange={setN} min={1} />
-          )}
-          {model === "M/G/1" && (
-            <NumberField label="σ servicio" value={sigma} onChange={setSigma} min={0} hint="Desv. estándar del tiempo de servicio" />
-          )}
-          <NumberField label="Costo espera / unidad tiempo" value={costWait} onChange={setCostWait} min={0} />
-          <NumberField label="Costo servidor / unidad tiempo" value={costServer} onChange={setCostServer} min={0} />
-        </FieldGrid>
-        {model.includes("/s") && (
-          <FieldGrid>
-            <label className="field-checkbox">
-              <input type="checkbox" checked={optimizeS} onChange={(e) => setOptimizeS(e.target.checked)} />
-              Optimizar número de servidores (s)
-            </label>
-            {optimizeS && (
-              <NumberField label="s máximo" value={sMax} onChange={setSMax} min={1} />
-            )}
-          </FieldGrid>
-        )}
-      </Section>
-    </FormModulePage>
-  );
 }
 
 /* ——— Inventarios ——— */
