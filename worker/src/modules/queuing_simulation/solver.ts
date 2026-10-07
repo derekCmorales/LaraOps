@@ -23,7 +23,7 @@ import { solve as solveQueues } from "../queues/solver";
 const MAX_EVENTS = 2_000_000;
 const MAX_SERVERS = 100;
 const MAX_TIME = 1_000_000;
-/** Eventos que se listan uno por uno, como la tabla de simulación hecha a mano. */
+/** Eventos que se listan uno por uno en la tabla «eventos». */
 const TRACE_EVENTS = 25;
 
 type Request = {

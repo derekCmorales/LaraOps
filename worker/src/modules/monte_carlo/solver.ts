@@ -13,7 +13,7 @@ import { RESERVED_NAMES, compileExpression } from "./expr";
 import { MULBERRY_INCREMENT, createRng, nextUnit, seedToUint32 } from "./rng";
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** Réplicas que se listan una por una: alcanza para revisar a mano un ejercicio de clase. */
+/** Réplicas que se listan una por una en la tabla «muestra». */
 const SAMPLE_ROWS = 50;
 
 type Variable = { name: string; distribution: Distribution };
@@ -130,7 +130,7 @@ function rngMethodTable(seed32: number): NamedTable {
     name: "metodo",
     columns: ["concepto", "detalle"],
     rows: [
-      ["Método", "Mulberry32: un contador de 32 bits cuyos bits se mezclan. No usa el azar del navegador. Para seguir a mano el método de libro (xᵢ = (a·xᵢ₋₁ + c) mod m) elige el congruencial lineal."],
+      ["Método", "Mulberry32: un contador de 32 bits cuyos bits se mezclan. No usa el azar del navegador. Si necesitas ver cada paso de xᵢ = (a·xᵢ₋₁ + c) mod m, elige el congruencial lineal."],
       [
         "Recurrencia",
         `El estado s es un entero de 32 bits. Se parte de s₀ = ${seed32} (la semilla pasada a 32 bits sin signo) y cada número hace s ← (s + ${MULBERRY_INCREMENT}) módulo 2³². ${MULBERRY_INCREMENT} es el hexadecimal 6D2B79F5.`,
@@ -225,7 +225,7 @@ function primeFactors(m: number): number[] {
 }
 
 /**
- * Congruencial lineal de libro: xᵢ = (a·xᵢ₋₁ + c) mod m y Uᵢ = xᵢ / m.
+ * Congruencial lineal: xᵢ = (a·xᵢ₋₁ + c) mod m y Uᵢ = xᵢ / m.
  * Se calcula con BigInt para que a·x no pierda dígitos aunque m llegue a 2³².
  * Por omisión usa los parámetros de Numerical Recipes (a = 1664525, c = 1013904223, m = 2³²).
  */
@@ -535,7 +535,7 @@ function solveMonteCarlo(o: Record<string, unknown>): ModuleResult {
   const n = valid.length;
   if (n < 30) {
     warnings.push(
-      `Solo hay ${n} réplica${n === 1 ? "" : "s"} válida${n === 1 ? "" : "s"}. Sirve para seguir el método a mano, pero el intervalo del 95% supone una muestra grande (30 o más) y aquí es solo orientativo.`,
+      `Solo hay ${n} réplica${n === 1 ? "" : "s"} válida${n === 1 ? "" : "s"}. El intervalo del 95% supone una muestra grande (30 o más), así que aquí es solo orientativo.`,
     );
   }
   const stderr = stats.std / Math.sqrt(n);

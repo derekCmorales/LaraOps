@@ -308,7 +308,7 @@ export default function MonteCarloEditor({ form, report, showErrors, onChange, o
               onChange={(replications) => set({ replications })}
               error={err("replications")}
               placeholder="2000"
-              hint="Entre 1 y 20000. Pocas (10 o 20) sirven para seguirlo a mano; miles estrechan el intervalo."
+              hint="Entre 1 y 20000. Más réplicas estrechan el intervalo."
             />
           ) : (
             <NumField
@@ -341,7 +341,7 @@ export default function MonteCarloEditor({ form, report, showErrors, onChange, o
       {form.mode === "monte_carlo" ? (
         <>
           <fieldset className="eoq-section">
-            <legend>Plantillas del curso</legend>
+            <legend>Plantillas</legend>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               <button type="button" className="btn btn-ghost" onClick={() => onReplace(templateOrderProfit())}>
                 Ganancia de un pedido

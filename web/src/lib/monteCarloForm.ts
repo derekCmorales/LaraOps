@@ -7,7 +7,7 @@ export const MODES: { value: McMode; label: string; hint: string }[] = [
   {
     value: "rng",
     label: "Números U(0, 1)",
-    hint: "Genera uniformes U(0, 1). Elige el congruencial lineal para seguir el método del libro paso a paso, o Mulberry32 para muestras grandes. Con muchas muestras la media se acerca a 1/2 y la varianza a 1/12.",
+    hint: "Genera uniformes U(0, 1) con un congruencial lineal (a, c, m), que muestra cada paso y el periodo, o con Mulberry32 para muestras grandes. Con muchas muestras la media se acerca a 1/2 y la varianza a 1/12.",
   },
   {
     value: "variates",
@@ -168,7 +168,7 @@ export function templatePert(): McForm {
 }
 
 export function exampleForm(mode: McMode): McForm {
-  // Ejemplo de libro: a = 5, c = 3, m = 16, x₀ = 7 cumple Hull-Dobell y repite cada 16.
+  // Ejemplo chico: a = 5, c = 3, m = 16, x₀ = 7 cumple Hull-Dobell y repite cada 16.
   if (mode === "rng") {
     return { ...blankMonteCarloForm(), mode: "rng", rngMethod: "lcg", lcgA: "5", lcgC: "3", lcgM: "16", seed: "7", n: "20" };
   }

@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
 import AppFooter from "./components/AppFooter";
 import CommandPalette from "./components/CommandPalette";
-import TrackNav from "./components/TrackNav";
-import { recordVisit } from "./lib/learning";
+import { recordVisit } from "./lib/recent";
 import { moduleByPath } from "./lib/modulesCatalog";
 import HomePage from "./pages/HomePage";
 import AssignmentPage from "./pages/AssignmentPage";
@@ -58,7 +57,7 @@ export default function App() {
   const location = useLocation();
   const current = moduleByPath(location.pathname);
 
-  // Cada módulo abierto alimenta «Continúa donde te quedaste» y el avance de las rutas.
+  // Cada módulo abierto aparece en «Recientes» del inicio.
   useEffect(() => {
     if (current?.migrated) recordVisit(current.slug);
   }, [current]);
@@ -113,7 +112,6 @@ export default function App() {
           <Route path="/aggregate" element={<AggregatePage />} />
           <Route path="/facility" element={<FacilityPage />} />
         </Routes>
-        {current?.migrated ? <TrackNav slug={current.slug} /> : null}
       </main>
       <AppFooter />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />

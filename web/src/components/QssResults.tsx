@@ -142,7 +142,7 @@ export default function QssResults({ result }: Props) {
           <h3 className="section-label">Primeros eventos, uno por uno</h3>
           <p className="field-hint">
             Así avanza el reloj de eventos discretos: salta de un evento al siguiente (una llegada o una salida) y en cada
-            salto actualiza la fila y los servidores ocupados. Es la misma tabla que se arma a mano en clase.
+            salto actualiza la fila y los servidores ocupados.
           </p>
           <SolutionTable
             caption="Tabla de eventos"
