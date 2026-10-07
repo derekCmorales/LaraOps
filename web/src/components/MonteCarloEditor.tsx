@@ -14,6 +14,7 @@ import {
   type DistForm,
   type McForm,
   type McReport,
+  type RngMethod,
   type VarForm,
 } from "../lib/monteCarloForm";
 
@@ -255,9 +256,45 @@ export default function MonteCarloEditor({ form, report, showErrors, onChange, o
           ))}
         </div>
         {modeHint ? <p className="field-hint">{modeHint}</p> : null}
+        {form.mode === "rng" ? (
+          <>
+            <div className="eoq-toggle" role="radiogroup" aria-label="Generador">
+              {(
+                [
+                  ["lcg", "Congruencial lineal (a, c, m)"],
+                  ["mulberry32", "Mulberry32"],
+                ] as [RngMethod, string][]
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={form.rngMethod === value}
+                  className={form.rngMethod === value ? "eoq-toggle-btn is-on" : "eoq-toggle-btn"}
+                  onClick={() => set({ rngMethod: value })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {form.rngMethod === "lcg" ? (
+              <>
+                <p className="field-hint">
+                  xᵢ = (a·xᵢ₋₁ + c) mod m y Uᵢ = xᵢ / m. Con c = 0 es el congruencial multiplicativo. Verás cada paso,
+                  el periodo y si los parámetros cumplen las condiciones de periodo completo (Hull-Dobell).
+                </p>
+                <div className="eoq-grid">
+                  <NumField label="Multiplicador a" value={form.lcgA} onChange={(lcgA) => set({ lcgA })} error={err("lcgA")} placeholder="5" />
+                  <NumField label="Incremento c" value={form.lcgC} onChange={(lcgC) => set({ lcgC })} error={err("lcgC")} placeholder="3" hint="0 para el multiplicativo." />
+                  <NumField label="Módulo m" value={form.lcgM} onChange={(lcgM) => set({ lcgM })} error={err("lcgM")} placeholder="16" hint="Entero de 2 a 2³² (4294967296)." />
+                </div>
+              </>
+            ) : null}
+          </>
+        ) : null}
         <div className="eoq-grid">
           <NumField
-            label="Semilla"
+            label={form.mode === "rng" && form.rngMethod === "lcg" ? "Semilla x₀" : "Semilla"}
             value={form.seed}
             onChange={(seed) => set({ seed })}
             error={err("seed")}
@@ -271,7 +308,7 @@ export default function MonteCarloEditor({ form, report, showErrors, onChange, o
               onChange={(replications) => set({ replications })}
               error={err("replications")}
               placeholder="2000"
-              hint="Entre 100 y 20000. Más réplicas estrechan el intervalo."
+              hint="Entre 1 y 20000. Pocas (10 o 20) sirven para seguirlo a mano; miles estrechan el intervalo."
             />
           ) : (
             <NumField

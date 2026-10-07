@@ -22,6 +22,8 @@ export type DecisionForm = {
   alternatives: string[];
   states: string[];
   payoff: string[][];
+  /** «max»: los valores son ganancias. «min»: son costos y gana el menor. */
+  sense: "max" | "min";
   useProbabilities: boolean;
   probabilities: string[];
   criterion: Criterion;
@@ -97,6 +99,7 @@ export function blankDecisionForm(): DecisionForm {
       ["", ""],
       ["", ""],
     ],
+    sense: "max",
     useProbabilities: true,
     probabilities: ["0.5", "0.5"],
     criterion: "all",
@@ -137,8 +140,32 @@ export function blankDecisionForm(): DecisionForm {
   };
 }
 
-export function exampleDecision(kind: "payoff" | "utility" | "tree" | "bayes"): DecisionForm {
+export function exampleDecision(kind: "payoff" | "cost" | "utility" | "tree" | "bayes"): DecisionForm {
   const base = blankDecisionForm();
+  if (kind === "cost") {
+    // Tamaño de planta contra demanda: costos anuales (miles). Gana el menor costo.
+    return {
+      ...base,
+      mode: "payoff_table",
+      sense: "min",
+      alternatives: ["Planta chica", "Planta mediana", "Planta grande"],
+      states: ["Demanda baja", "Demanda media", "Demanda alta"],
+      payoff: [
+        ["30", "60", "110"],
+        ["45", "50", "70"],
+        ["80", "75", "65"],
+      ],
+      useProbabilities: true,
+      probabilities: ["0.3", "0.45", "0.25"],
+      criterion: "all",
+      hurwiczAlpha: "0.5",
+      utilities: [
+        ["", "", ""],
+        ["", "", ""],
+        ["", "", ""],
+      ],
+    };
+  }
   if (kind === "payoff") {
     return {
       ...base,
@@ -304,6 +331,7 @@ export function formFromBody(body: unknown): DecisionForm {
   if (typeof o.criterion === "string" && (CRITERIA as string[]).includes(o.criterion)) {
     form.criterion = o.criterion as Criterion;
   }
+  form.sense = o.sense === "min" ? "min" : "max";
   if (typeof o.hurwicz_alpha === "number") form.hurwiczAlpha = formatDraft(o.hurwicz_alpha);
   else if (typeof o.hurwicz_alpha === "string") form.hurwiczAlpha = o.hurwicz_alpha;
 
@@ -725,6 +753,8 @@ export function validateDecisionForm(form: DecisionForm): DecisionReport {
     criterion: form.criterion,
     hurwicz_alpha: alpha,
   };
+  // La utilidad trabaja con ganancias; los costos solo aplican a la tabla de pagos.
+  if (form.sense === "min" && form.mode === "payoff_table") body.sense = "min";
   if (probabilities) body.probabilities = probabilities;
   if (utility) body.utility = utility;
   return { errors, hints, body };

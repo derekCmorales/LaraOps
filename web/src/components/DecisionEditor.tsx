@@ -452,7 +452,10 @@ export default function DecisionEditor({ form, report, showErrors, onChange }: P
 
       <div className="sheet-toolbar" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" className="btn btn-quiet" onClick={() => onChange(exampleDecision("payoff"))}>
-          Ejemplo: tabla (decision_01)
+          Ejemplo: tabla de ganancias
+        </button>
+        <button type="button" className="btn btn-quiet" onClick={() => onChange(exampleDecision("cost"))}>
+          Ejemplo: tabla de costos
         </button>
         <button type="button" className="btn btn-quiet" onClick={() => onChange(exampleDecision("bayes"))}>
           Ejemplo: Bayes
@@ -494,7 +497,36 @@ export default function DecisionEditor({ form, report, showErrors, onChange }: P
               onChange={(count) => onChange(resizeStates(form, count))}
             />
           </div>
-          <p className="section-label">Matriz de pagos</p>
+          {form.mode === "payoff_table" ? (
+            <div className="eoq-field">
+              <span className="eoq-label">Los valores de la tabla son</span>
+              <div className="eoq-toggle" role="radiogroup" aria-label="Los valores de la tabla son">
+                {(
+                  [
+                    ["max", "Ganancias (gana el mayor)"],
+                    ["min", "Costos (gana el menor)"],
+                  ] as ["max" | "min", string][]
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.sense === value}
+                    className={form.sense === value ? "eoq-toggle-btn is-on" : "eoq-toggle-btn"}
+                    onClick={() => patch({ sense: value })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="field-hint">
+                {form.sense === "min"
+                  ? "Con costos, el optimista busca el menor de los mínimos, el pesimista el menor de los peores y el arrepentimiento mide cuánto pagas de más contra el mejor costo de cada estado."
+                  : "Con ganancias, el optimista busca el mayor de los máximos y el pesimista el mayor de los mínimos."}
+              </p>
+            </div>
+          ) : null}
+          <p className="section-label">{form.mode === "payoff_table" && form.sense === "min" ? "Matriz de costos" : "Matriz de pagos"}</p>
           <PayoffGrid
             rowNames={form.alternatives}
             colNames={form.states}

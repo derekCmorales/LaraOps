@@ -25,6 +25,9 @@ export default function QssResults({ result }: Props) {
   const gap =
     product != null && m.L != null ? Math.abs(m.L - product) / Math.max(Math.abs(product), 1e-9) : null;
   const resumen = result.tables?.find((item) => item.name === "resumen");
+  const teoria = result.tables?.find((item) => item.name === "teoria");
+  const eventos = result.tables?.find((item) => item.name === "eventos");
+  const cell = (value: unknown) => (typeof value === "number" || typeof value === "string" ? value : value == null ? "—" : String(value));
 
   return (
     <div>
@@ -101,6 +104,27 @@ export default function QssResults({ result }: Props) {
         </p>
       ) : null}
 
+      {teoria ? (
+        <>
+          <h3 className="section-label">Simulado contra teórico</h3>
+          <p className="field-hint">
+            La fórmula exacta del mismo modelo da el valor de largo plazo. La simulación es una sola corrida: se acerca a
+            ese número cuando el horizonte crece. Una diferencia de pocos puntos porcentuales es ruido normal.
+          </p>
+          <SolutionTable
+            caption="Simulación contra fórmula"
+            columns={["Métrica", "Simulado", "Teórico", "Diferencia"]}
+            rows={teoria.rows.map((row) => [
+              cell(row[0]),
+              typeof row[1] === "number" ? fmtNum(row[1], 4) : cell(row[1]),
+              typeof row[2] === "number" ? fmtNum(row[2], 4) : "—",
+              typeof row[3] === "number" ? `${row[3] >= 0 ? "+" : ""}${fmtNum(row[3] * 100, 1)}%` : "—",
+            ])}
+            textColumns={[0]}
+          />
+        </>
+      ) : null}
+
       <h3 className="section-label">Evolución de la fila</h3>
       <ChartViews result={result} />
 
@@ -111,6 +135,22 @@ export default function QssResults({ result }: Props) {
           rows={resumen.rows.map((row) => row.map((cell) => (typeof cell === "number" || typeof cell === "string" ? cell : String(cell ?? ""))))}
           textColumns={[0]}
         />
+      ) : null}
+
+      {eventos?.rows.length ? (
+        <>
+          <h3 className="section-label">Primeros eventos, uno por uno</h3>
+          <p className="field-hint">
+            Así avanza el reloj de eventos discretos: salta de un evento al siguiente (una llegada o una salida) y en cada
+            salto actualiza la fila y los servidores ocupados. Es la misma tabla que se arma a mano en clase.
+          </p>
+          <SolutionTable
+            caption="Tabla de eventos"
+            columns={["#", "Tiempo", "Qué pasa", "Cliente", "Servidor", "En fila", "Ocupados"]}
+            rows={eventos.rows.map((row) => row.map((value, i) => (i === 1 && typeof value === "number" ? fmtNum(value, 3) : cell(value))))}
+            textColumns={[2]}
+          />
+        </>
       ) : null}
     </div>
   );

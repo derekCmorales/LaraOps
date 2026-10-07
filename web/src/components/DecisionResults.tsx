@@ -412,8 +412,18 @@ function Warnings({ warnings }: { warnings: string[] }) {
   );
 }
 
+const COST_LABEL: Record<string, string> = {
+  maximax: "Optimista (menor de los mínimos)",
+  maximin: "Pesimista (menor de los peores)",
+  expected_value: "Costo esperado",
+};
+
 function PayoffView({ result }: Props) {
   const metrics = result.solution.metrics;
+  const costs = metrics.minimize === 1;
+  const regret = findTable(result, "arrepentimiento");
+  const labelOf = (key: string) => (costs ? COST_LABEL[key] : undefined) ?? CRITERION_LABEL[key] ?? key;
+  const ev = costs ? "costo esperado" : "valor esperado";
   const decisions = findTable(result, "decisions");
   const payoff = findTable(result, "payoff");
   const utilidad = findTable(result, "utilidad");
@@ -425,7 +435,14 @@ function PayoffView({ result }: Props) {
   const stateName = payoff?.columns[1] ?? "el primer estado";
   const breakdowns = (decisions?.rows ?? []).filter((row) => String(row[0] ?? "").includes(":"));
   const detailGroups = [
-    { prefix: "EV:", title: utilidad ? "Utilidad esperada de cada alternativa" : "Valor esperado de cada alternativa" },
+    {
+      prefix: "EV:",
+      title: utilidad
+        ? "Utilidad esperada de cada alternativa"
+        : costs
+          ? "Costo esperado de cada alternativa"
+          : "Valor esperado de cada alternativa",
+    },
     { prefix: "laplace:", title: "Laplace de cada alternativa" },
     { prefix: "hurwicz:", title: "Hurwicz de cada alternativa" },
   ];
@@ -436,11 +453,13 @@ function PayoffView({ result }: Props) {
         {utilidad ? (
           <Kpi label="Equivalente cierto" value={fmt(metrics.best_certainty_equivalent)} note="de la mayor utilidad esperada" main />
         ) : metrics.EV != null ? (
-          <Kpi label="Valor esperado" value={fmt(metrics.EV)} note="mejor alternativa" main />
+          <Kpi label={costs ? "Costo esperado" : "Valor esperado"} value={fmt(metrics.EV)} note="mejor alternativa" main />
         ) : null}
         {metrics.EVPI_dinero != null ? <Kpi label="VEIP en dinero" value={fmt(metrics.EVPI_dinero)} /> : null}
         {!utilidad && metrics.EVPI != null ? <Kpi label="VEIP" value={fmt(metrics.EVPI)} note="tope a pagar por información perfecta" /> : null}
-        {metrics.EVwPI != null && !utilidad ? <Kpi label="VE con información perfecta" value={fmt(metrics.EVwPI)} /> : null}
+        {metrics.EVwPI != null && !utilidad ? (
+          <Kpi label={costs ? "Costo con información perfecta" : "VE con información perfecta"} value={fmt(metrics.EVwPI)} />
+        ) : null}
         {metrics.EOL != null && !utilidad ? <Kpi label="Pérdida de oportunidad" value={fmt(metrics.EOL)} /> : null}
         {utilidad && metrics.VE_elegida != null ? <Kpi label="VE en dinero de la elegida" value={fmt(metrics.VE_elegida)} /> : null}
       </div>
@@ -448,8 +467,11 @@ function PayoffView({ result }: Props) {
       {metrics.EVPI != null && !utilidad ? (
         <p className="eoq-policy">
           El VEIP es <strong>{fmt(metrics.EVPI)}</strong>. Es lo máximo que conviene pagar por conocer el estado de la
-          naturaleza antes de decidir: la diferencia entre el valor esperado con información perfecta y el mejor valor
-          esperado sin ella.
+          naturaleza antes de decidir:{" "}
+          {costs
+            ? "la diferencia entre el menor costo esperado sin información y el costo esperado con información perfecta."
+            : "la diferencia entre el valor esperado con información perfecta y el mejor valor esperado sin ella."}
+          {metrics.EOL != null ? " También es igual a la menor pérdida de oportunidad esperada (POE)." : ""}
         </p>
       ) : null}
       {utilidad && metrics.EVPI_dinero != null ? (
@@ -463,16 +485,15 @@ function PayoffView({ result }: Props) {
       {summary.length ? (
         <>
           <p className="field-hint">
-            Maximax se queda con el mejor pago posible. Maximin mira el peor pago de cada alternativa y elige el menos
-            malo. El arrepentimiento minimax reduce la pena de no haber acertado el estado. Hurwicz mezcla el mejor y el
-            peor pago con el peso α. Laplace supone estados igual de probables. El valor esperado pondera cada pago por
-            su probabilidad.
+            {costs
+              ? "Con costos gana el número más bajo. El optimista toma el menor costo posible de cada alternativa y elige el menor. El pesimista mira el peor (mayor) costo y elige el menos malo. El arrepentimiento minimax reduce lo que pagarías de más por no acertar el estado. Hurwicz mezcla el mejor y el peor costo con el peso α. Laplace supone estados igual de probables. El costo esperado pondera cada costo por su probabilidad."
+              : "Maximax se queda con el mejor pago posible. Maximin mira el peor pago de cada alternativa y elige el menos malo. El arrepentimiento minimax reduce la pena de no haber acertado el estado. Hurwicz mezcla el mejor y el peor pago con el peso α. Laplace supone estados igual de probables. El valor esperado pondera cada pago por su probabilidad."}
             {utilidad ? " Con utilidad, esos criterios se calculan sobre U, no sobre el dinero." : ""}
           </p>
           <SolutionTable
             caption="Qué recomienda cada criterio"
             columns={["Criterio", "Alternativa", "Valor"]}
-            rows={summary.map((row) => [CRITERION_LABEL[String(row[0])] ?? String(row[0]), row[1], row[2]] as Cell[])}
+            rows={summary.map((row) => [labelOf(String(row[0])), row[1], row[2]] as Cell[])}
             textColumns={[0, 1]}
             activeRowIndexes={summary
               .map((row, index) => (row[0] === "expected_value" ? index : -1))
@@ -496,11 +517,34 @@ function PayoffView({ result }: Props) {
 
       {payoff ? (
         <SolutionTable
-          caption="Tabla de pagos"
+          caption={costs ? "Tabla de costos" : "Tabla de pagos"}
           columns={payoff.columns}
           rows={payoff.rows.map(cells)}
           textColumns={[0]}
         />
+      ) : null}
+
+      {regret ? (
+        <>
+          <p className="field-hint">
+            {costs
+              ? "Arrepentimiento: en cada estado, cuánto pagas de más contra el costo más bajo de esa columna."
+              : "Arrepentimiento: en cada estado, cuánto dejas de ganar contra el mejor pago de esa columna."}{" "}
+            El criterio minimax elige la fila con el menor arrepentimiento máximo
+            {utilidad ? " (aquí medido en utilidad)" : ""}.
+          </p>
+          <SolutionTable
+            caption="Tabla de arrepentimiento (costo de oportunidad)"
+            columns={[...regret.columns.slice(0, -1), "Máximo"]}
+            rows={regret.rows.map(cells)}
+            textColumns={[0]}
+            activeRowIndexes={(() => {
+              const maxes = regret.rows.map((row) => Number(row[row.length - 1]));
+              const best = Math.min(...maxes);
+              return maxes.map((v, i) => (Math.abs(v - best) < 1e-9 ? i : -1)).filter((i) => i >= 0);
+            })()}
+          />
+        </>
       ) : null}
 
       {utilidad ? (
@@ -522,7 +566,7 @@ function PayoffView({ result }: Props) {
 
       {ranges.length || prob || pago ? (
         <>
-          <h3 className="section-label">Sensibilidad del valor esperado en dinero</h3>
+          <h3 className="section-label">Sensibilidad del {ev} en dinero</h3>
           <p className="field-hint">
             {prob
               ? "Para cada estado se mueve su probabilidad de 0 a 1 y el resto se reparte en la misma proporción que hoy. Si las demás probabilidades suman 0, el resto se reparte por igual."
@@ -551,12 +595,12 @@ function PayoffView({ result }: Props) {
           {pago ? (
             <>
               <p className="field-hint">
-                Cuánto puedes subir o bajar un pago, sin tocar el resto, antes de que el valor esperado recomiende otra
-                alternativa. «Sin límite» significa que ese lado no le quita el primer lugar.
+                Cuánto puedes subir o bajar un {costs ? "costo" : "pago"}, sin tocar el resto, antes de que el {ev}{" "}
+                recomiende otra alternativa. «Sin límite» significa que ese lado no le quita el primer lugar.
               </p>
               <SolutionTable
-                caption="Rango de cada pago"
-                columns={["Alternativa", "Estado", "Pago actual", "Disminución permitida", "Aumento permitido"]}
+                caption={costs ? "Rango de cada costo" : "Rango de cada pago"}
+                columns={["Alternativa", "Estado", costs ? "Costo actual" : "Pago actual", "Disminución permitida", "Aumento permitido"]}
                 rows={pago.rows.map((row) =>
                   row.map((cell, index) => (index >= 3 && cell == null ? "sin límite" : cell)),
                 ) as Cell[][]}
@@ -730,7 +774,15 @@ export default function DecisionResults({ result }: Props) {
       : findTable(result, "utilidad")
         ? result.solution.metrics.best_certainty_equivalent
         : result.solution.metrics.EV;
-  const valueLabel = bayes ? "VE" : tree ? "VE del árbol" : findTable(result, "utilidad") ? "EC" : "VE";
+  const valueLabel = bayes
+    ? "VE"
+    : tree
+      ? "VE del árbol"
+      : findTable(result, "utilidad")
+        ? "EC"
+        : result.solution.metrics.minimize === 1
+          ? "Costo esperado"
+          : "VE";
 
   return (
     <div className="eoq-results">

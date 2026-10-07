@@ -50,6 +50,9 @@ export default function MonteCarloResults({ result }: Props) {
   const sample = table(result, "muestra");
   const method = table(result, "metodo");
   const percentiles = table(result, "percentiles");
+  const lcgSteps = table(result, "pasos_lcg");
+  const period = table(result, "periodo");
+  const ranges = table(result, "rangos");
 
   return (
     <div>
@@ -111,6 +114,46 @@ export default function MonteCarloResults({ result }: Props) {
         ) : null}
       </div>
 
+      {lcgSteps ? (
+        <>
+          <h3 className="section-label">Paso a paso del congruencial</h3>
+          <p className="field-hint">
+            Cada fila multiplica el número anterior por a, le suma c y se queda con el residuo al dividir entre m. Ese
+            residuo es el siguiente xᵢ y, dividido entre m, da el número uniforme Uᵢ.
+            {m.period != null ? ` El periodo observado es ${fmtNum(m.period, 0)}: después de esos números la lista se repite.` : ""}
+          </p>
+          <SolutionTable
+            caption={`xᵢ = (${fmtNum(m.a, 0)}·xᵢ₋₁ + ${fmtNum(m.c, 0)}) mod ${fmtNum(m.m, 0)}`}
+            columns={["i", "xᵢ₋₁", "a·xᵢ₋₁ + c", "xᵢ", "Uᵢ = xᵢ / m"]}
+            rows={rowsOf(lcgSteps.rows)}
+            textColumns={[]}
+          />
+        </>
+      ) : null}
+      {period ? (
+        <SolutionTable
+          caption="¿Periodo completo? Condiciones de Hull-Dobell"
+          columns={["Condición", "Cumple", "Detalle"]}
+          rows={rowsOf(period.rows)}
+          textColumns={[0, 1, 2]}
+        />
+      ) : null}
+      {ranges ? (
+        <>
+          <h3 className="section-label">Asignación de números aleatorios</h3>
+          <p className="field-hint">
+            Cada valor de una variable discreta recibe el tramo de U entre la probabilidad acumulada anterior y la suya. Si
+            U cae en ese tramo (mayor que «desde» y hasta «hasta»), la réplica toma ese valor.
+          </p>
+          <SolutionTable
+            caption="Rangos de números aleatorios"
+            columns={["Variable", "Valor", "Probabilidad", "Acumulada", "U desde", "U hasta"]}
+            rows={rowsOf(ranges.rows)}
+            textColumns={[0]}
+          />
+        </>
+      ) : null}
+
       {percentiles ? (
         <SolutionTable
           caption="Percentiles"
@@ -131,7 +174,7 @@ export default function MonteCarloResults({ result }: Props) {
         />
       ) : null}
 
-      {sample ? (
+      {sample && !lcgSteps ? (
         <SolutionTable caption="Muestra" columns={sample.columns} rows={rowsOf(sample.rows)} textColumns={[0]} />
       ) : null}
       {method ? (

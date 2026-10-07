@@ -7,7 +7,7 @@ export const MODES: { value: McMode; label: string; hint: string }[] = [
   {
     value: "rng",
     label: "Números U(0, 1)",
-    hint: "Genera uniformes con el congruencial Mulberry32. Con muchas muestras la media se acerca a 1/2 y la varianza a 1/12.",
+    hint: "Genera uniformes U(0, 1). Elige el congruencial lineal para seguir el método del libro paso a paso, o Mulberry32 para muestras grandes. Con muchas muestras la media se acerca a 1/2 y la varianza a 1/12.",
   },
   {
     value: "variates",
@@ -51,8 +51,15 @@ export type DistForm = {
 
 export type VarForm = { name: string; distribution: DistForm };
 
+export type RngMethod = "lcg" | "mulberry32";
+
 export type McForm = {
   mode: McMode;
+  /** Generador del modo «Números U(0, 1)». */
+  rngMethod: RngMethod;
+  lcgA: string;
+  lcgC: string;
+  lcgM: string;
   seed: string;
   n: string;
   replications: string;
@@ -64,7 +71,8 @@ export type McForm = {
 export type DistBody = Record<string, unknown>;
 
 export type McBody =
-  | { mode: "rng"; seed: number; n: number; method: "congruencial" }
+  | { mode: "rng"; seed: number; n: number; method: "mulberry32" }
+  | { mode: "rng"; seed: number; n: number; method: "lcg"; a: number; c: number; m: number }
   | { mode: "variates"; seed: number; n: number; distribution: DistBody }
   | {
       mode: "monte_carlo";
@@ -106,6 +114,11 @@ export function blankDist(): DistForm {
 export function blankMonteCarloForm(): McForm {
   return {
     mode: "monte_carlo",
+    // Parámetros de Numerical Recipes: periodo completo 2³² y cualquier semilla sirve.
+    rngMethod: "lcg",
+    lcgA: "1664525",
+    lcgC: "1013904223",
+    lcgM: "4294967296",
     seed: "42",
     n: "2000",
     replications: "2000",
@@ -155,7 +168,10 @@ export function templatePert(): McForm {
 }
 
 export function exampleForm(mode: McMode): McForm {
-  if (mode === "rng") return { ...blankMonteCarloForm(), mode: "rng", seed: "42", n: "2000" };
+  // Ejemplo de libro: a = 5, c = 3, m = 16, x₀ = 7 cumple Hull-Dobell y repite cada 16.
+  if (mode === "rng") {
+    return { ...blankMonteCarloForm(), mode: "rng", rngMethod: "lcg", lcgA: "5", lcgC: "3", lcgM: "16", seed: "7", n: "20" };
+  }
   if (mode === "variates") {
     return {
       ...blankMonteCarloForm(),
@@ -215,9 +231,14 @@ export function formFromBody(body: unknown): McForm {
         };
       })
     : form.variables;
+  const lcg = o.method === "lcg" || o.method === "congruencial";
   return {
     ...form,
     mode,
+    rngMethod: mode === "rng" && !lcg ? "mulberry32" : "lcg",
+    lcgA: draft(o.a) || form.lcgA,
+    lcgC: draft(o.c) || form.lcgC,
+    lcgM: draft(o.m) || form.lcgM,
     seed: draft(o.seed) || form.seed,
     n: draft(o.n) || form.n,
     replications: draft(o.replications) || form.replications,
@@ -335,10 +356,11 @@ function distributionBody(
     const low = readRequired(dist.low, key("low"), "Indica el mínimo.", errors);
     const mode = readRequired(dist.mode, key("mode"), "Indica la moda.", errors);
     const high = readRequired(dist.high, key("high"), "Indica el máximo.", errors);
-    if (low != null && mode != null && high != null && !(low < mode && mode < high)) {
-      errors[key("mode")] = "Se necesita mínimo < moda < máximo.";
+    const ordered = low != null && mode != null && high != null && low < high && low <= mode && mode <= high;
+    if (low != null && mode != null && high != null && !ordered) {
+      errors[key("mode")] = "Se necesita mínimo ≤ moda ≤ máximo, con mínimo < máximo.";
     }
-    if (low == null || mode == null || high == null || !(low < mode && mode < high)) return null;
+    if (low == null || mode == null || high == null || !ordered) return null;
     return { family, low, mode, high };
   }
 
@@ -430,8 +452,23 @@ export function validateMonteCarloForm(form: McForm): McReport {
     const max = form.mode === "rng" ? 5000 : 20000;
     const n = readCount(form.n, "n", "Indica cuántos números generar.", "La cantidad", 1, max, errors);
     if (form.mode === "rng") {
-      if (seed == null || n == null) return { errors, hints, body: null };
-      return { errors, hints, body: { mode: "rng", seed, n, method: "congruencial" } };
+      if (form.rngMethod === "mulberry32") {
+        if (seed == null || n == null) return { errors, hints, body: null };
+        return { errors, hints, body: { mode: "rng", seed, n, method: "mulberry32" } };
+      }
+      const m = readCount(form.lcgM, "lcgM", "Indica el módulo m.", "El módulo m", 2, 2 ** 32, errors);
+      const top = m ?? 2 ** 32;
+      const a = readCount(form.lcgA, "lcgA", "Indica el multiplicador a.", "El multiplicador a", 1, top - 1, errors);
+      const c = readCount(form.lcgC, "lcgC", "Indica el incremento c (0 si es multiplicativo).", "El incremento c", 0, top - 1, errors);
+      if (seed != null && (!Number.isInteger(seed) || seed < 0 || seed >= top)) {
+        errors.seed = `En el congruencial la semilla x₀ es un entero entre 0 y ${top - 1}.`;
+      } else if (seed === 0 && c === 0) {
+        errors.seed = "Con c = 0 la semilla 0 da siempre 0. Usa otra semilla.";
+      }
+      if (seed == null || n == null || m == null || a == null || c == null || errors.seed) {
+        return { errors, hints, body: null };
+      }
+      return { errors, hints, body: { mode: "rng", seed, n, method: "lcg", a, c, m } };
     }
     const distribution = distributionBody(form.distribution, "dist", errors, hints);
     if (seed == null || n == null || !distribution || Object.keys(errors).length) return { errors, hints, body: null };
@@ -443,7 +480,7 @@ export function validateMonteCarloForm(form: McForm): McReport {
     "replications",
     "Indica el número de réplicas.",
     "Las réplicas",
-    100,
+    1,
     20000,
     errors,
   );
