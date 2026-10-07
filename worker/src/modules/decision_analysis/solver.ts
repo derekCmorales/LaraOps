@@ -31,7 +31,10 @@ type UtilityBlock = {
   utilities?: number[][];
 };
 
+type Sense = "max" | "min";
+
 type PayoffRequest = {
+  sense: Sense;
   alternatives: string[];
   states: string[];
   payoff: number[][];
@@ -80,9 +83,14 @@ function names(value: unknown, what: string, limit: number): string[] {
   if (value.length > limit) {
     throw new SolverError(`Hay demasiados ${what}: el máximo es ${limit}.`);
   }
+  const seen = new Set<string>();
   return value.map((item, i) => {
     const s = String(item ?? "").trim();
     if (!s) throw new SolverError(`El ${what} ${i + 1} no tiene nombre.`);
+    if (seen.has(s)) {
+      throw new SolverError(`El nombre «${s}» está repetido. Cada ${what} necesita un nombre distinto.`);
+    }
+    seen.add(s);
     return s;
   });
 }
@@ -140,6 +148,12 @@ function parseCriterion(value: unknown): Criterion {
   throw new SolverError(
     "El criterio no es válido. Usa expected_value, maximax, maximin, minimax_regret, hurwicz, laplace o all.",
   );
+}
+
+function parseSense(value: unknown): Sense {
+  if (value == null || value === "" || value === "max") return "max";
+  if (value === "min") return "min";
+  throw new SolverError("El sentido debe ser «max» (los valores son ganancias) o «min» (los valores son costos).");
 }
 
 function parseAlpha(value: unknown): number {
@@ -233,6 +247,12 @@ function parsePayoff(body: Record<string, unknown>, requireUtility: boolean): Pa
   if (requireUtility && !utility) {
     throw new SolverError("El modo utilidad necesita el bloque utility.");
   }
+  const sense = parseSense(body.sense);
+  if (sense === "min" && utility) {
+    throw new SolverError(
+      "La utilidad trabaja con ganancias. Si tus valores son costos, escríbelos como ganancias negativas o quita el bloque de utilidad.",
+    );
+  }
   const criterion = parseCriterion(body.criterion);
   let probabilities: number[] | null = null;
   if (body.probabilities != null) {
@@ -246,6 +266,7 @@ function parsePayoff(body: Record<string, unknown>, requireUtility: boolean): Pa
     throw new SolverError("El criterio de valor esperado necesita las probabilidades de los estados.");
   }
   return {
+    sense,
     alternatives,
     states,
     payoff,
@@ -327,6 +348,8 @@ type CriteriaOut = {
   rows: unknown[][];
   evs: number[] | null;
   bestEvIdx: number | null;
+  regret: number[][];
+  maxRegret: number[];
 };
 
 function want(criterion: Criterion, name: Criterion): boolean {
@@ -410,7 +433,37 @@ function criteriaOf(
     alternatives.forEach((alt, i) => rows.push([`EV:${alt}`, alt, evs![i]]));
   }
 
-  return { variables, metrics, rows, evs, bestEvIdx };
+  return { variables, metrics, rows, evs, bestEvIdx, regret, maxRegret };
+}
+
+/** Claves de pago (no de arrepentimiento) que cambian de signo al volver a costos. */
+const PAYOFF_METRICS = ["maximax_payoff", "maximin_payoff", "hurwicz_payoff", "laplace_payoff", "EV", "EVwPI"];
+const PAYOFF_ROWS = /^(maximax|maximin|hurwicz|laplace|expected_value|EV:|hurwicz:|laplace:)/;
+
+/**
+ * Con costos se resuelve sobre −C (minimizar C es maximizar −C) y aquí se devuelven
+ * los pagos a su signo. El arrepentimiento, el VEIP y la pérdida esperada ya son ≥ 0.
+ */
+function restoreCostSign(out: CriteriaOut): CriteriaOut {
+  for (const key of PAYOFF_METRICS) {
+    if (out.metrics[key] != null) out.metrics[key] = -out.metrics[key];
+  }
+  const rows = out.rows.map((row) =>
+    typeof row[0] === "string" && PAYOFF_ROWS.test(row[0]) && typeof row[2] === "number" ? [row[0], row[1], -row[2]] : row,
+  );
+  return { ...out, rows, evs: out.evs ? out.evs.map((v) => -v) : null };
+}
+
+/** Un empate cambia la lectura: el criterio no distingue entre esas alternativas. */
+function tieWarnings(out: CriteriaOut, alternatives: string[], warnings: string[]) {
+  if (!out.evs || out.bestEvIdx == null) return;
+  const best = out.evs[out.bestEvIdx];
+  const tied = alternatives.filter((_, i) => Math.abs(out.evs![i] - best) <= 1e-9 * (1 + Math.abs(best)));
+  if (tied.length > 1) {
+    warnings.push(
+      `Empate en el valor esperado entre ${tied.map((a) => `«${a}»`).join(" y ")}. Se reporta la primera; cualquiera de ellas es óptima con estas probabilidades.`,
+    );
+  }
 }
 
 function expectedValues(payoff: number[][], probs: number[]): number[] {
@@ -534,7 +587,7 @@ function payoffSensitivityRows(
   return rows;
 }
 
-function xyGraph(payoff: number[][], alternatives: string[], stateName: string): GraphXY {
+function xyGraph(payoff: number[][], alternatives: string[], stateName: string, sense: Sense): GraphXY {
   const xs = new Set<number>();
   for (let i = 0; i <= 40; i++) xs.add(i / 40);
   for (let i = 0; i < payoff.length; i++) {
@@ -557,9 +610,10 @@ function xyGraph(payoff: number[][], alternatives: string[], stateName: string):
     name: "Envolvente",
     x,
     y: x.map((p) => {
-      let best = Number.NEGATIVE_INFINITY;
+      let best = sense === "min" ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
       for (let i = 0; i < payoff.length; i++) {
-        best = Math.max(best, payoff[i][0] * p + payoff[i][1] * (1 - p));
+        const v = payoff[i][0] * p + payoff[i][1] * (1 - p);
+        best = sense === "min" ? Math.min(best, v) : Math.max(best, v);
       }
       return best;
     }),
@@ -568,9 +622,9 @@ function xyGraph(payoff: number[][], alternatives: string[], stateName: string):
     type: "xy",
     series,
     x_label: `P(${stateName})`,
-    y_label: "Valor esperado",
-    title: `Valor esperado contra P(${stateName})`,
-    subtitle: "Cada recta es una alternativa. La envolvente es el mejor valor esperado en cada probabilidad.",
+    y_label: sense === "min" ? "Costo esperado" : "Valor esperado",
+    title: `${sense === "min" ? "Costo" : "Valor"} esperado contra P(${stateName})`,
+    subtitle: `Cada recta es una alternativa. La envolvente es el ${sense === "min" ? "menor costo" : "mejor valor"} esperado en cada probabilidad.`,
     kind: "line",
   };
 }
@@ -580,8 +634,12 @@ function solvePayoff(body: Record<string, unknown>, requireUtility: boolean): Mo
   const warnings = req.warnings;
   const probs = req.probabilities;
   const utility = req.utility;
+  const minimize = req.sense === "min";
+  // Con costos todo se resuelve sobre −C; los pagos se devuelven con su signo al final.
+  const work = minimize ? req.payoff.map((row) => row.map((v) => -v)) : req.payoff;
 
-  const monetary = criteriaOf(req.payoff, req.alternatives, probs, req.criterion, req.hurwiczAlpha);
+  const rawMonetary = criteriaOf(work, req.alternatives, probs, req.criterion, req.hurwiczAlpha);
+  const monetary = minimize ? restoreCostSign(rawMonetary) : rawMonetary;
   const analysis = utility
     ? criteriaOf(
         utilityMatrix(req.payoff, utility, req.alternatives, req.states),
@@ -591,6 +649,8 @@ function solvePayoff(body: Record<string, unknown>, requireUtility: boolean): Mo
         req.hurwiczAlpha,
       )
     : monetary;
+  if (minimize) analysis.metrics.minimize = 1;
+  tieWarnings(analysis, req.alternatives, warnings);
 
   const tables: NamedTable[] = [
     { name: "decisions", columns: ["criterio", "alternativa", "valor"], rows: analysis.rows },
@@ -598,6 +658,11 @@ function solvePayoff(body: Record<string, unknown>, requireUtility: boolean): Mo
       name: "payoff",
       columns: ["alternativa", ...req.states],
       rows: req.alternatives.map((alt, i) => [alt, ...req.payoff[i]]),
+    },
+    {
+      name: "arrepentimiento",
+      columns: ["alternativa", ...req.states, "maximo"],
+      rows: req.alternatives.map((alt, i) => [alt, ...analysis.regret[i], analysis.maxRegret[i]]),
     },
   ];
 
@@ -640,7 +705,7 @@ function solvePayoff(body: Record<string, unknown>, requireUtility: boolean): Mo
   let graph: GraphXY | null = null;
   if (probs && monetary.bestEvIdx != null) {
     if (req.states.length === 2) {
-      const crossings = breakevenPoints(req.payoff, req.alternatives, monetary.bestEvIdx);
+      const crossings = breakevenPoints(work, req.alternatives, monetary.bestEvIdx);
       if (crossings.length) {
         sensitivity = emptySensitivity();
         sensitivity.objective_ranges = crossings;
@@ -649,7 +714,7 @@ function solvePayoff(body: Record<string, unknown>, requireUtility: boolean): Mo
     if (req.states.length >= 2) {
       const rows: unknown[][] = [];
       for (let k = 0; k < req.states.length; k++) {
-        for (const seg of probabilitySegments(req.payoff, req.alternatives, probs, k)) {
+        for (const seg of probabilitySegments(work, req.alternatives, probs, k)) {
           rows.push([req.states[k], seg.from, seg.to, seg.alt]);
         }
       }
@@ -662,15 +727,18 @@ function solvePayoff(body: Record<string, unknown>, requireUtility: boolean): Mo
     tables.push({
       name: "sensibilidad_pago",
       columns: ["alternativa", "estado", "pago_actual", "disminucion_permitida", "aumento_permitido"],
-      rows: payoffSensitivityRows(req.payoff, req.alternatives, req.states, probs),
+      // Con costos, bajar −C es subir C: se intercambian las columnas y se restaura el signo.
+      rows: payoffSensitivityRows(work, req.alternatives, req.states, probs).map((row) =>
+        minimize ? [row[0], row[1], -(row[2] as number), row[4], row[3]] : row,
+      ),
     });
   }
-  if (req.states.length === 2) graph = xyGraph(req.payoff, req.alternatives, req.states[0]);
+  if (req.states.length === 2) graph = xyGraph(req.payoff, req.alternatives, req.states[0], req.sense);
 
   return okResult("decision_analysis", {
     variables: analysis.variables,
     metrics: analysis.metrics,
-    objective_sense: "max",
+    objective_sense: req.sense,
     sensitivity,
     graph,
     tables,
@@ -704,6 +772,11 @@ function parseTree(body: Record<string, unknown>): { nodes: TreeNode[]; root: st
       const edge: TreeEdge = { to, label: e.label == null ? "" : String(e.label) };
       if (e.probability != null && e.probability !== "") {
         edge.probability = num(e.probability, `La probabilidad del arco «${id}» → «${to}» no es un número.`);
+        if (edge.probability < 0 || edge.probability > 1) {
+          throw new SolverError(
+            `La probabilidad del arco «${id}» → «${to}» es ${formatLoose(edge.probability)}. Debe estar entre 0 y 1.`,
+          );
+        }
       }
       return edge;
     });
@@ -853,6 +926,15 @@ function parseBayes(body: Record<string, unknown>): BayesRequest {
   const signals = names(b.signals, "señal", MAX_SIGNALS);
   const payoff = matrix(b.payoff, actions, states, "la matriz de pagos");
   const likelihood = matrix(b.likelihood, signals, states, "la verosimilitud");
+  likelihood.forEach((row, i) =>
+    row.forEach((value, j) => {
+      if (value < 0 || value > 1) {
+        throw new SolverError(
+          `La verosimilitud P(${signals[i]} | ${states[j]}) es ${formatLoose(value)}. Debe estar entre 0 y 1.`,
+        );
+      }
+    }),
+  );
   const warnings: string[] = [];
   const prior = parseProbabilities(
     b.prior,

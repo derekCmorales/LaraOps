@@ -563,3 +563,103 @@ describe("Bayes", () => {
     assertClose(good?.[1] as number, 0.45);
   });
 });
+
+describe("decision analysis: auditoría", () => {
+  it("con costos (sense min) cada criterio elige el menor costo", () => {
+    // Costos: A = [10, 2], B = [6, 6], C = [3, 12]; P = [0.5, 0.5].
+    const result = solve({
+      alternatives: ["A", "B", "C"],
+      states: ["s1", "s2"],
+      payoff: [
+        [10, 2],
+        [6, 6],
+        [3, 12],
+      ],
+      probabilities: [0.5, 0.5],
+      sense: "min",
+    });
+    const m = result.solution.metrics;
+    expect(result.solution.objective_sense).toBe("min");
+    expect(m.minimize).toBe(1);
+    // Optimista con costos = mínimo de los mínimos: A tiene 2.
+    expect(result.solution.variables.maximax).toBe(0);
+    expect(m.maximax_payoff).toBe(2);
+    // Pesimista = el menor de los peores costos: B con 6.
+    expect(result.solution.variables.maximin).toBe(1);
+    expect(m.maximin_payoff).toBe(6);
+    // Costo esperado: A 6, B 6, C 7.5 → A (primera en el empate) con 6.
+    assertClose(m.EV, 6, 1e-12);
+    // Con información perfecta: 0.5·3 + 0.5·2 = 2.5; VEIP = 6 − 2.5.
+    assertClose(m.EVwPI, 2.5, 1e-12);
+    assertClose(m.EVPI, 3.5, 1e-12);
+    // Arrepentimiento: costo menos el mínimo de la columna.
+    const regret = table(result, "arrepentimiento");
+    expect(regret.rows).toEqual([
+      ["A", 7, 0, 7],
+      ["B", 3, 4, 4],
+      ["C", 0, 10, 10],
+    ]);
+    expect(result.warnings.some((w) => /Empate/.test(w))).toBe(true);
+    if (result.graph?.type !== "xy") throw new Error("se esperaba gráfico");
+    const env = result.graph.series.find((s) => s.name === "Envolvente")!;
+    // En p = 0 la envolvente es el menor costo de s2 (2), no el mayor.
+    expect((env.y as number[])[0]).toBe(2);
+  });
+
+  it("la tabla de arrepentimiento acompaña a la tabla de ganancias", () => {
+    const result = solve({
+      alternatives: ["A", "B"],
+      states: ["s1", "s2"],
+      payoff: [
+        [10, 2],
+        [4, 8],
+      ],
+    });
+    expect(table(result, "arrepentimiento").rows).toEqual([
+      ["A", 0, 6, 6],
+      ["B", 6, 0, 6],
+    ]);
+  });
+
+  it("rechaza costos con utilidad, nombres repetidos y probabilidades fuera de [0, 1]", () => {
+    expect(() =>
+      solve({
+        mode: "utility",
+        alternatives: ["A"],
+        states: ["s"],
+        payoff: [[1]],
+        sense: "min",
+        utility: { kind: "linear" },
+      }),
+    ).toThrow(/utilidad/);
+    expect(() =>
+      solve({ alternatives: ["A", "A"], states: ["s1"], payoff: [[1], [2]] }),
+    ).toThrow(/repetido/);
+    expect(() =>
+      solve({
+        mode: "decision_tree",
+        tree: [
+          { id: "c", kind: "chance", children: [{ to: "t1", probability: 1.5 }, { to: "t2", probability: -0.5 }] },
+          { id: "t1", kind: "terminal", value: 1 },
+          { id: "t2", kind: "terminal", value: 0 },
+        ],
+      }),
+    ).toThrow(/entre 0 y 1/);
+    expect(() =>
+      solve({
+        mode: "bayes",
+        bayes: {
+          actions: ["a"],
+          states: ["s1", "s2"],
+          prior: [0.5, 0.5],
+          payoff: [[1, 0]],
+          signals: ["+", "-"],
+          likelihood: [
+            [1.2, 0.3],
+            [-0.2, 0.7],
+          ],
+        },
+      }),
+    ).toThrow(/verosimilitud/);
+  });
+});

@@ -96,8 +96,16 @@ describe("game theory", () => {
       y: s.y as number[],
     }));
     // C1 = [4, 1] domina a C3 = [6, 3] porque es menor en las dos filas. C2 no está dominada.
-    expect(series).toHaveLength(2);
-    expect(series.map((s) => s.name)).toEqual(["C1", "C2"]);
+    // Después de las rectas vienen la envolvente inferior y el punto óptimo.
+    expect(series).toHaveLength(4);
+    expect(series.slice(0, 2).map((s) => s.name)).toEqual(["C1", "C2"]);
+    expect(series[2].name).toMatch(/^Envolvente inferior/);
+    expect(series[3].name).toBe("Óptimo");
+    // La fila juega R1 con 2/3: ahí la envolvente toca su pico, que es el valor 3.
+    assertClose(series[3].x[0], 2 / 3, 1e-9);
+    assertClose(series[3].y[0], 3, 1e-9);
+    const peak = Math.max(...series[2].y);
+    assertClose(peak, 3, 1e-9);
     expect(series[0].x).toEqual([0, 1]);
     expect(series[0].y).toEqual([1, 4]);
     expect(series[1].y).toEqual([5, 2]);
@@ -260,5 +268,27 @@ describe("game theory", () => {
         payoff: Array.from({ length: 13 }, () => [1]),
       }),
     ).toThrow(SolverError);
+  });
+});
+
+describe("game theory: método gráfico m×2", () => {
+  it("la envolvente superior baja hasta el valor en la mezcla de la columna", () => {
+    const result = solve({
+      row_strategies: ["R1", "R2", "R3"],
+      col_strategies: ["C1", "C2"],
+      payoff: [
+        [3, -1],
+        [-2, 4],
+        [0, 1],
+      ],
+    });
+    if (result.graph?.type !== "xy") throw new Error("se esperaba un gráfico xy");
+    const env = result.graph.series.find((s) => String(s.name).startsWith("Envolvente superior"));
+    const opt = result.graph.series.find((s) => s.name === "Óptimo");
+    expect(env).toBeTruthy();
+    expect(opt).toBeTruthy();
+    const value = result.solution.metrics.game_value;
+    assertClose(Math.min(...(env!.y as number[])), value, 1e-9);
+    assertClose((opt!.y as number[])[0], value, 1e-9);
   });
 });

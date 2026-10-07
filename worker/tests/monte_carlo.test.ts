@@ -280,6 +280,52 @@ describe("monte carlo", () => {
     expect(Math.abs(mean - 458.75) / 458.75).toBeLessThan(0.05);
     const muestra = result.tables!.find((t) => t.name === "muestra")!;
     expect(muestra.columns).toEqual(["réplica", "demanda", "resultado"]);
-    expect(muestra.rows).toHaveLength(15);
+    expect(muestra.rows).toHaveLength(50);
+  });
+});
+
+describe("monte carlo: auditoría", () => {
+  it("congruencial lineal de libro: a = 5, c = 3, m = 16, x0 = 7", () => {
+    const result = solve({ mode: "rng", method: "lcg", seed: 7, n: 20, a: 5, c: 3, m: 16 });
+    const steps = result.tables!.find((t) => t.name === "pasos_lcg")!;
+    // x1 = (5·7 + 3) mod 16 = 38 mod 16 = 6; x2 = 33 mod 16 = 1; x3 = 8.
+    expect(steps.rows[0]).toEqual([1, 7, "38", 6, 6 / 16]);
+    expect(steps.rows[1]).toEqual([2, 6, "33", 1, 1 / 16]);
+    expect(steps.rows[2]).toEqual([3, 1, "8", 8, 8 / 16]);
+    // Cumple Hull-Dobell: periodo completo 16, así que con 20 números se repite.
+    expect(result.solution.metrics.period).toBe(16);
+    const periodo = result.tables!.find((t) => t.name === "periodo")!;
+    expect(periodo.rows.at(-1)![1]).toBe("sí");
+    expect(result.warnings.some((w) => /se repite cada 16/.test(w))).toBe(true);
+  });
+
+  it("congruencial multiplicativo: rechaza la semilla 0 y detecta periodo corto", () => {
+    expect(() => solve({ mode: "rng", method: "lcg", seed: 0, n: 5, a: 3, c: 0, m: 7 })).toThrow(/semilla 0/);
+    const result = solve({ mode: "rng", method: "lcg", seed: 1, n: 10, a: 2, c: 0, m: 7 });
+    // 1 → 2 → 4 → 1: periodo 3.
+    expect(result.solution.metrics.period).toBe(3);
+    expect(() => solve({ mode: "rng", method: "lcg", seed: 20, n: 5, a: 3, c: 1, m: 16 })).toThrow(/m − 1/);
+  });
+
+  it("triangular con la moda en un extremo y réplicas pocas para hacerlo a mano", () => {
+    const tri = solve({ mode: "variates", seed: 3, n: 500, distribution: { family: "triangular", low: 0, mode: 0, high: 10 } });
+    expect(tri.solution.metrics.theoretical_mean).toBeCloseTo(10 / 3, 12);
+    expect(tri.solution.metrics.min).toBeGreaterThanOrEqual(0);
+    expect(tri.solution.metrics.max).toBeLessThanOrEqual(10);
+    const few = solve({
+      mode: "monte_carlo",
+      seed: 1,
+      replications: 10,
+      variables: [{ name: "d", distribution: { family: "discrete", values: [1, 2, 3], probabilities: [0.2, 0.5, 0.3] } }],
+      expression: "2*d",
+    });
+    expect(few.tables!.find((t) => t.name === "muestra")!.rows).toHaveLength(10);
+    expect(few.warnings.some((w) => /orientativo/.test(w))).toBe(true);
+    const rangos = few.tables!.find((t) => t.name === "rangos")!;
+    expect(rangos.rows.map((r) => [r[1], r[4], r[5]])).toEqual([
+      [1, 0, 0.2],
+      [2, 0.2, 0.7],
+      [3, 0.7, 1],
+    ]);
   });
 });

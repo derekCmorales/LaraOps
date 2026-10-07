@@ -73,8 +73,8 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
       probabilities: [1],
     },
     notes:
-      "mode: payoff_table, utility, decision_tree, bayes. utility: {kind: linear|exponential|table, risk_tolerance}. " +
-      "bayes admite sample_cost. El árbol usa tree y root_id.",
+      "mode: payoff_table, utility, decision_tree, bayes. sense: max (ganancias, por omisión) o min (costos, solo payoff_table). " +
+      "utility: {kind: linear|exponential|table, risk_tolerance}. bayes admite sample_cost. El árbol usa tree y root_id.",
   },
   game: {
     module: "game_theory",
@@ -226,7 +226,7 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
       expression: "20 * min(demanda, 60) - 8 * 60",
     },
     notes:
-      "mode: rng (n), variates (n y distribution) o monte_carlo (replications, variables, expression). " +
+      "mode: rng (n; method lcg con a, c, m o mulberry32), variates (n y distribution) o monte_carlo (replications, variables, expression). " +
       "Familias: uniform, exponential, normal, triangular, discrete, empirical. La fórmula admite + - * / ^, paréntesis y min, max, abs, sqrt, floor, ceil.",
   },
   aggregate: {

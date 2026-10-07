@@ -85,8 +85,10 @@ export function parseDistribution(raw: unknown, name: string, warnings: string[]
     const low = requireNumber(o.low, `${where} falta el mínimo (low) de la triangular.`);
     const mode = requireNumber(o.mode, `${where} falta la moda (mode) de la triangular.`);
     const high = requireNumber(o.high, `${where} falta el máximo (high) de la triangular.`);
-    if (!(low < mode && mode < high)) {
-      throw new SolverError(`${where} la triangular está mal ordenada: se necesita mínimo < moda < máximo.`);
+    if (!(low < high) || mode < low || mode > high) {
+      throw new SolverError(
+        `${where} la triangular está mal ordenada: se necesita mínimo ≤ moda ≤ máximo, con mínimo < máximo.`,
+      );
     }
     return { family, low, mode, high };
   }
@@ -133,7 +135,7 @@ export function sampleDistribution(dist: Distribution, rng: () => number): numbe
       const u = nextUnit(rng);
       const span = dist.high - dist.low;
       const c = (dist.mode - dist.low) / span;
-      if (u < c) return dist.low + Math.sqrt(u * span * (dist.mode - dist.low));
+      if (u < c || c === 1) return dist.low + Math.sqrt(u * span * (dist.mode - dist.low));
       return dist.high - Math.sqrt((1 - u) * span * (dist.high - dist.mode));
     }
     case "discrete": {

@@ -1,5 +1,5 @@
 /**
- * Mulberry32 (Tommy Ettinger): generador congruencial de 32 bits.
+ * Mulberry32 (Tommy Ettinger): contador de Weyl de 32 bits con mezcla de bits.
  *
  * No usa Math.random. La misma semilla produce la misma sucesión.
  *

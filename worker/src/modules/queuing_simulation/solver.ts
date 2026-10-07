@@ -2,6 +2,7 @@ import { SolverError } from "../../errors";
 import type { GraphXY, ModuleResult, NamedTable } from "../../schema";
 import { okResult } from "../../schema";
 import { createRng, sampleExponential, seedToUint32 } from "../monte_carlo/rng";
+import { solve as solveQueues } from "../queues/solver";
 
 /**
  * Simulación de eventos discretos M/M/s, porte de
@@ -22,6 +23,8 @@ import { createRng, sampleExponential, seedToUint32 } from "../monte_carlo/rng";
 const MAX_EVENTS = 2_000_000;
 const MAX_SERVERS = 100;
 const MAX_TIME = 1_000_000;
+/** Eventos que se listan uno por uno, como la tabla de simulación hecha a mano. */
+const TRACE_EVENTS = 25;
 
 type Request = {
   arrivalRate: number;
@@ -123,6 +126,60 @@ function clock(rng: () => number, rate: number): number {
   return x > 1e-12 ? x : 1e-12;
 }
 
+type SimSummary = {
+  L: number;
+  Lq: number;
+  W: number;
+  Wq: number;
+  utilization: number;
+  rejected: number;
+  arrivals: number;
+};
+
+/**
+ * Valores exactos del mismo modelo (M/M/s o M/M/s/K) con el solver de teoría de colas.
+ * Sin cupo y con carga ≥ 1 no hay estado estable, así que no hay contra qué comparar.
+ */
+function theoryTable(req: Request, sim: SimSummary): NamedTable | null {
+  const s = req.servers;
+  let body: Record<string, unknown>;
+  if (req.capacity == null) {
+    if (req.arrivalRate >= s * req.serviceRate) return null;
+    body = s === 1 ? { model: "M/M/1" } : { model: "M/M/s", s };
+  } else {
+    if (req.capacity < s) return null;
+    body = s === 1 ? { model: "M/M/1/K", K: req.capacity } : { model: "M/M/s/K", s, K: req.capacity };
+  }
+  let m: Record<string, number>;
+  try {
+    m = solveQueues({ ...body, lambda: req.arrivalRate, mu: req.serviceRate, include_pn: false }).solution.metrics;
+  } catch {
+    return null;
+  }
+  const util = m.busy_servers != null ? m.busy_servers / s : m.rho;
+  const row = (label: string, simulated: number, exact: number | undefined) => [
+    label,
+    simulated,
+    exact ?? null,
+    exact == null || Math.abs(exact) < 1e-12 ? null : (simulated - exact) / exact,
+  ];
+  const rows: unknown[][] = [
+    row("L", sim.L, m.L),
+    row("Lq", sim.Lq, m.Lq),
+    row("W", sim.W, m.W),
+    row("Wq", sim.Wq, m.Wq),
+    row("Utilización", sim.utilization, util),
+  ];
+  if (req.capacity != null) {
+    rows.push(row("P(rechazo)", sim.arrivals > 0 ? sim.rejected / sim.arrivals : 0, m.P_block));
+  }
+  return {
+    name: "teoria",
+    columns: ["metrica", "simulado", "teorico", "diferencia_relativa"],
+    rows,
+  };
+}
+
 export function solve(body: unknown): ModuleResult {
   const req = parseRequest(body);
   const rng = createRng(req.seed);
@@ -133,7 +190,16 @@ export function solve(body: unknown): ModuleResult {
   let nextArrival = clock(rng, req.arrivalRate);
   const freeAt = Array.from({ length: req.servers }, () => 0);
   const queue: number[] = [];
+  const queueIds: number[] = [];
+  const servingId = Array.from({ length: req.servers }, () => 0);
   let qHead = 0;
+  let arrivals = 0;
+  const trace: unknown[][] = [];
+  const busyNow = (time: number) => freeAt.reduce((acc, free) => acc + (free > time ? 1 : 0), 0);
+  const log = (time: number, kind: string, customer: number, server: number | null) => {
+    if (trace.length >= TRACE_EVENTS) return;
+    trace.push([trace.length + 1, time, kind, customer, server == null ? "—" : server + 1, qLen(), busyNow(time)]);
+  };
   const qLen = () => queue.length - qHead;
 
   let served = 0;
@@ -165,8 +231,9 @@ export function solve(body: unknown): ModuleResult {
     }
     const nextEvent = Math.min(nextArrival, nextDep);
     const tEnd = Math.min(nextEvent, req.time);
-    const dt = tEnd - lastT;
-    if (dt > 0 && lastT >= req.warmup) {
+    // Solo cuenta lo que cae después del calentamiento, aunque el tramo empiece antes.
+    const dt = tEnd - Math.max(lastT, req.warmup);
+    if (dt > 0) {
       let busy = 0;
       for (const free of freeAt) if (free > lastT) busy += 1;
       const waiting = qLen();
@@ -183,11 +250,11 @@ export function solve(body: unknown): ModuleResult {
     lastT = t;
     const isArrival = Math.abs(t - nextArrival) < 1e-12;
     if (isArrival) {
-      let busy = 0;
-      for (const free of freeAt) if (free > t) busy += 1;
-      const inSystem = busy + qLen();
+      arrivals += 1;
+      const inSystem = busyNow(t) + qLen();
       if (req.capacity != null && inSystem >= req.capacity) {
         rejected += 1;
+        log(t, "llegada rechazada (sistema lleno)", arrivals, null);
       } else {
         let assigned = false;
         for (let i = 0; i < freeAt.length; i++) {
@@ -199,10 +266,16 @@ export function solve(body: unknown): ModuleResult {
               served += 1;
             }
             assigned = true;
+            servingId[i] = arrivals;
+            log(t, "llegada, pasa directo a servicio", arrivals, i);
             break;
           }
         }
-        if (!assigned) queue.push(t);
+        if (!assigned) {
+          queue.push(t);
+          queueIds.push(arrivals);
+          log(t, "llegada, espera en la fila", arrivals, null);
+        }
       }
       nextArrival = t + clock(rng, req.arrivalRate);
     } else {
@@ -210,6 +283,7 @@ export function solve(body: unknown): ModuleResult {
         if (Math.abs(freeAt[i] - t) < 1e-9) {
           if (qLen() > 0) {
             const arrivedAt = queue[qHead];
+            const who = queueIds[qHead];
             qHead += 1;
             const service = clock(rng, req.serviceRate);
             const wait = Math.max(0, t - arrivedAt);
@@ -219,8 +293,11 @@ export function solve(body: unknown): ModuleResult {
               served += 1;
             }
             freeAt[i] = t + service;
+            log(t, `sale el cliente ${servingId[i]}; entra el ${who} desde la fila`, who, i);
+            servingId[i] = who;
           } else {
             freeAt[i] = t;
+            log(t, "salida; el servidor queda libre", servingId[i], i);
           }
           break;
         }
@@ -229,6 +306,7 @@ export function solve(body: unknown): ModuleResult {
 
     if (qHead > 1024 && qHead * 2 > queue.length) {
       queue.splice(0, qHead);
+      queueIds.splice(0, qHead);
       qHead = 0;
     }
     sample(t);
@@ -281,6 +359,13 @@ export function solve(body: unknown): ModuleResult {
     warnings.push(`Se rechazaron ${rejected} clientes porque el sistema estaba en su cupo.`);
   }
 
+  const theory = theoryTable(req, { L, Lq, W, Wq, utilization, rejected, arrivals });
+  if (theory) {
+    warnings.push(
+      "La tabla «simulado contra teórico» compara esta corrida con la fórmula exacta del modelo. Las diferencias se achican con un horizonte más largo; una sola réplica siempre trae algo de ruido.",
+    );
+  }
+
   const graph: GraphXY = {
     type: "xy",
     series: [{ name: "longitud_cola", x: samplesT, y: samplesQ }],
@@ -318,6 +403,13 @@ export function solve(body: unknown): ModuleResult {
       ],
     },
   ];
+
+  if (theory) tables.push(theory);
+  tables.push({
+    name: "eventos",
+    columns: ["evento", "tiempo", "que_pasa", "cliente", "servidor", "en_fila", "ocupados"],
+    rows: trace,
+  });
 
   return okResult("queuing_simulation", {
     variables: { ...metrics },

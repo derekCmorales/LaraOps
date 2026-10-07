@@ -533,40 +533,69 @@ function expectedTable(
   };
 }
 
+/** Abscisas del método gráfico: una malla fina más los cruces entre rectas. */
+function graphXs(lines: { a: number; b: number }[], extra: number): number[] {
+  const xs = new Set<number>();
+  for (let i = 0; i <= 40; i++) xs.add(i / 40);
+  for (let i = 0; i < lines.length; i++) {
+    for (let k = i + 1; k < lines.length; k++) {
+      const den = lines[i].b - lines[i].a - (lines[k].b - lines[k].a);
+      if (Math.abs(den) < 1e-12) continue;
+      const t = (lines[k].a - lines[i].a) / den;
+      if (t > 0 && t < 1) xs.add(snap(t));
+    }
+  }
+  if (extra >= 0 && extra <= 1) xs.add(snap(extra));
+  return [...xs].sort((a, b) => a - b);
+}
+
+/**
+ * Método gráfico de un juego 2×n o m×2. Cada recta es el pago esperado contra una estrategia
+ * pura del rival; la envolvente es lo que el jugador se garantiza y su pico (o valle) es el valor.
+ */
 function graph2xn(
   reduced: number[][],
   rowIdx: number[],
   colIdx: number[],
   rowNames: string[],
   colNames: string[],
+  mix: Mix,
 ): GraphXY | null {
-  if (reduced.length === 2) {
-    return {
-      type: "xy",
-      series: colIdx.map((col, j) => ({
-        name: colNames[col],
-        x: [0, 1],
-        y: [reduced[1][j], reduced[0][j]],
-      })),
-      x_label: `P(${rowNames[rowIdx[0]]})`,
-      y_label: "Pago esperado",
-      title: "Método gráfico: pago esperado contra cada estrategia de columna",
-    };
-  }
-  if ((reduced[0]?.length ?? 0) === 2) {
-    return {
-      type: "xy",
-      series: rowIdx.map((row, i) => ({
-        name: rowNames[row],
-        x: [0, 1],
-        y: [reduced[i][1], reduced[i][0]],
-      })),
-      x_label: `P(${colNames[colIdx[0]]})`,
-      y_label: "Pago esperado",
-      title: "Método gráfico: pago esperado contra cada estrategia de fila",
-    };
-  }
-  return null;
+  const rowsGraph = reduced.length === 2;
+  if (!rowsGraph && (reduced[0]?.length ?? 0) !== 2) return null;
+  // Recta k: pago = a + (b − a)·t, con t = P(primera estrategia del jugador del eje).
+  const lines = rowsGraph
+    ? colIdx.map((col, j) => ({ name: colNames[col], a: reduced[1][j], b: reduced[0][j] }))
+    : rowIdx.map((row, i) => ({ name: rowNames[row], a: reduced[i][1], b: reduced[i][0] }));
+  const tStar = rowsGraph ? mix.x[0] : mix.y[0];
+  const xs = graphXs(lines, tStar);
+  const at = (line: { a: number; b: number }, t: number) => snap(line.a + (line.b - line.a) * t);
+  const series: Record<string, unknown>[] = lines.map((line) => ({
+    name: line.name,
+    x: [0, 1],
+    y: [line.a, line.b],
+  }));
+  series.push({
+    name: rowsGraph ? "Envolvente inferior (lo que la fila se garantiza)" : "Envolvente superior (lo más que paga la columna)",
+    x: xs,
+    y: xs.map((t) => {
+      const values = lines.map((line) => at(line, t));
+      return rowsGraph ? Math.min(...values) : Math.max(...values);
+    }),
+  });
+  series.push({ name: "Óptimo", x: [snap(tStar)], y: [snap(mix.value)] });
+  return {
+    type: "xy",
+    series,
+    x_label: rowsGraph ? `P(${rowNames[rowIdx[0]]})` : `P(${colNames[colIdx[0]]})`,
+    y_label: "Pago esperado",
+    title: rowsGraph
+      ? "Método gráfico: pago esperado contra cada estrategia de columna"
+      : "Método gráfico: pago esperado contra cada estrategia de fila",
+    subtitle: rowsGraph
+      ? "La fila elige la probabilidad donde la envolvente inferior es más alta (maximin)."
+      : "La columna elige la probabilidad donde la envolvente superior es más baja (minimax).",
+  };
 }
 
 export function solve(body: unknown): ModuleResult {
@@ -631,7 +660,7 @@ export function solve(body: unknown): ModuleResult {
       mixedRows.push([colNames[idx], mix.y[j]]);
     });
     if (reduced.length === 2 || (reduced[0]?.length ?? 0) === 2) {
-      graph = graph2xn(reduced, rows, cols, rowNames, colNames);
+      graph = graph2xn(reduced, rows, cols, rowNames, colNames, mix);
     }
   }
 

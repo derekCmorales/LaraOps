@@ -85,3 +85,40 @@ describe("queuing simulation", () => {
     expect(() => solve({ ...base, seed: "no" })).toThrow(SolverError);
   });
 });
+
+describe("queuing simulation: auditoría", () => {
+  it("compara contra la fórmula M/M/1 y lista los primeros eventos", () => {
+    const result = solve({ arrival_rate: 2, service_rate: 3, num_servers: 1, simulation_time: 20000, seed: 7 });
+    const teoria = result.tables!.find((t) => t.name === "teoria")!;
+    const L = teoria.rows.find((r) => r[0] === "L")!;
+    expect(L[2]).toBeCloseTo(2, 9);
+    expect(Math.abs(L[3] as number)).toBeLessThan(0.1);
+    const eventos = result.tables!.find((t) => t.name === "eventos")!;
+    expect(eventos.rows).toHaveLength(25);
+    expect(eventos.rows[0][2]).toMatch(/llegada/);
+    // El tiempo de los eventos no retrocede.
+    const times = eventos.rows.map((r) => r[1] as number);
+    expect(times.every((t, i) => i === 0 || t >= times[i - 1])).toBe(true);
+  });
+
+  it("con cupo compara contra M/M/s/K, incluida la probabilidad de rechazo", () => {
+    const result = solve({ arrival_rate: 5, service_rate: 2, num_servers: 2, capacity: 4, simulation_time: 20000, seed: 7 });
+    const teoria = result.tables!.find((t) => t.name === "teoria")!;
+    const block = teoria.rows.find((r) => r[0] === "P(rechazo)")!;
+    expect(block[2]).toBeCloseTo(0.3168, 3);
+    expect(Math.abs((block[1] as number) - (block[2] as number))).toBeLessThan(0.02);
+  });
+
+  it("sin estado estable no inventa una comparación", () => {
+    const result = solve({ arrival_rate: 5, service_rate: 2, num_servers: 2, simulation_time: 200, seed: 1 });
+    expect(result.tables!.some((t) => t.name === "teoria")).toBe(false);
+  });
+
+  it("el calentamiento cuenta el tramo que cruza el corte", () => {
+    // Con calentamiento, el área se mide desde el corte exacto: la utilización queda en [0, 1].
+    const result = solve({ arrival_rate: 2, service_rate: 3, num_servers: 1, simulation_time: 5000, warmup: 0.37, seed: 11 });
+    const u = result.solution.metrics.utilization;
+    expect(u).toBeGreaterThan(0.6);
+    expect(u).toBeLessThan(0.73);
+  });
+});
