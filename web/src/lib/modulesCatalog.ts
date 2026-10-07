@@ -8,6 +8,8 @@ export type ModuleMeta = {
   api: string;
   /** Visible en home y búsqueda (workbench migrado). */
   migrated: boolean;
+  /** Palabras del problema (no del método) para que la búsqueda entienda «fila en el banco». */
+  problems?: string[];
 };
 
 export const MODULE_GROUPS = [
@@ -30,6 +32,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["lp", "simplex", "lineal", "sensibilidad", "ranging", "precio sombra"],
     api: "lp",
     migrated: true,
+    problems: ["producción", "recursos", "mezcla", "dieta", "ganancia", "utilidad máxima", "costo mínimo", "restricciones", "horas de máquina"],
   },
   {
     slug: "ilp",
@@ -90,6 +93,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["transporte", "vogel", "modi", "noroeste", "vam"],
     api: "transport",
     migrated: true,
+    problems: ["envío", "enviar", "fábricas", "plantas", "almacenes", "bodegas", "flete", "distribución", "oferta", "demanda"],
   },
   {
     slug: "assignment",
@@ -100,6 +104,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["asignación", "húngaro", "hungarian", "asignar", "trabajadores", "máquinas", "tareas"],
     api: "assignment",
     migrated: true,
+    problems: ["personas", "operarios", "empleados", "turnos", "uno a uno", "repartir tareas"],
   },
   {
     slug: "networks",
@@ -110,6 +115,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["redes", "dijkstra", "kruskal", "flujo", "tsp", "árbol", "transbordo"],
     api: "networks",
     migrated: true,
+    problems: ["ruta", "camino", "distancia", "conectar", "cable", "tubería", "red", "ciudades", "flujo máximo"],
   },
   {
     slug: "pert-cpm",
@@ -120,6 +126,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["pert", "cpm", "ruta crítica", "gantt", "proyecto", "crashing"],
     api: "pert_cpm",
     migrated: true,
+    problems: ["actividades", "obra", "cronograma", "plazo", "precedencia", "holgura", "atraso"],
   },
   {
     slug: "jobs",
@@ -140,6 +147,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["colas", "fila", "espera", "waiting", "mm1", "mms", "erlang", "servidores", "rho", "lq", "wq", "little"],
     api: "queues",
     migrated: true,
+    problems: ["fila", "banco", "cajas", "clientes esperando", "tiempo de espera", "llegadas", "servicio"],
   },
   {
     slug: "qss",
@@ -150,6 +158,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["simulación", "colas", "qss", "eventos", "discreta"],
     api: "queuing_simulation",
     migrated: true,
+    problems: ["fila simulada", "eventos discretos", "comparar con teoría"],
   },
   {
     slug: "monte-carlo",
@@ -160,6 +169,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["monte carlo", "simulación", "aleatorio", "semilla", "réplicas", "uniforme", "exponencial"],
     api: "monte_carlo",
     migrated: true,
+    problems: ["riesgo", "incertidumbre", "estimar", "aleatorios", "congruencial", "probabilidad"],
   },
   {
     slug: "markov",
@@ -170,6 +180,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["markov", "transición", "absorbente", "estado estable", "recurrente", "política"],
     api: "markov",
     migrated: true,
+    problems: ["cambio de marca", "clima", "estados", "probabilidad de transición", "largo plazo", "mantenimiento"],
   },
   {
     slug: "eoq",
@@ -180,6 +191,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["eoq", "pedido", "inventario básico"],
     api: "eoq",
     migrated: true,
+    problems: ["cuánto pedir", "lote", "compras", "almacenar", "reorden", "inventario"],
   },
   {
     slug: "inventory",
@@ -240,6 +252,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["decisión", "árbol", "emv", "evpi", "hurwicz", "bayes", "utilidad"],
     api: "decision_analysis",
     migrated: true,
+    problems: ["incertidumbre", "riesgo", "elegir", "alternativas", "pagos", "costos", "información perfecta", "veip"],
   },
   {
     slug: "game",
@@ -250,6 +263,7 @@ export const MODULES: ModuleMeta[] = [
     keywords: ["juegos", "silla", "mixta", "dominada", "maximin"],
     api: "game_theory",
     migrated: true,
+    problems: ["rival", "competencia", "competidor", "adversario", "suma cero", "estrategias"],
   },
   {
     slug: "quality",
@@ -295,15 +309,48 @@ export const MODULES: ModuleMeta[] = [
 
 export const MIGRATED_MODULES = MODULES.filter((m) => m.migrated);
 
+/** Minúsculas y sin acentos: «hungaro» encuentra «húngaro» y «asignacion» encuentra «Asignación». */
+export function normalizeText(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+/** Palabras sueltas que no ayudan a distinguir un módulo de otro. */
+const STOP = new Set(["de", "la", "el", "los", "las", "un", "una", "en", "y", "o", "a", "con", "para", "por", "que", "mi", "me", "se", "del", "al", "como", "cuanto", "cuantos", "cuantas"]);
+
+/**
+ * Puntaje de coincidencia. 0 = no aparece. El nombre pesa más que las palabras clave,
+ * y éstas más que los métodos; así «colas» pone primero Teoría de colas.
+ */
+function scoreModule(module: ModuleMeta, query: string): number {
+  const q = normalizeText(query.trim());
+  if (!q) return 1;
+  const name = normalizeText(module.name);
+  const keys = normalizeText([...module.keywords, ...(module.problems ?? [])].join(" | "));
+  const rest = normalizeText([module.methods, module.group].join(" "));
+  if (name === q) return 100;
+  if (name.startsWith(q)) return 80;
+  if (name.includes(q)) return 60;
+  if (keys.includes(q)) return 50;
+  if (rest.includes(q)) return 40;
+  const tokens = q.split(/\s+/).filter((tok) => tok.length > 1 && !STOP.has(tok));
+  if (!tokens.length) return 0;
+  const hay = `${name} ${keys} ${rest}`;
+  // Coincidencia por raíz: «almacenes» encuentra «almacén» y «filas» encuentra «fila».
+  const hits = tokens.filter((tok) => hay.includes(tok) || (tok.length > 4 && hay.includes(tok.slice(0, -2))));
+  if (!hits.length) return 0;
+  return (hits.length / tokens.length) * 30;
+}
+
 function matchesQuery(module: ModuleMeta, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const hay = [module.name, module.methods, module.group, ...module.keywords].join(" ").toLowerCase();
-  return hay.includes(q) || q.split(/\s+/).every((tok) => hay.includes(tok));
+  return scoreModule(module, query) > 0;
 }
 
 export function searchModules(query: string): ModuleMeta[] {
-  return MIGRATED_MODULES.filter((m) => matchesQuery(m, query));
+  if (!query.trim()) return MIGRATED_MODULES;
+  return MIGRATED_MODULES.map((m) => ({ m, score: scoreModule(m, query) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.m);
 }
 
 /** Módulos del catálogo que aún no aparecen como activos en el home. */

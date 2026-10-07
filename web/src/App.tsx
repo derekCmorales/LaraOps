@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Route, Routes, useLocation } from "react-router-dom";
 import AppFooter from "./components/AppFooter";
 import CommandPalette from "./components/CommandPalette";
-import { MODULE_GROUPS, searchDisabledModules, searchModules, type ModuleMeta } from "./lib/modulesCatalog";
+import TrackNav from "./components/TrackNav";
+import { recordVisit } from "./lib/learning";
+import { moduleByPath } from "./lib/modulesCatalog";
+import HomePage from "./pages/HomePage";
 import AssignmentPage from "./pages/AssignmentPage";
 import EoqPage from "./pages/EoqPage";
 import LpPage from "./pages/LpPage";
@@ -33,6 +36,8 @@ import {
 } from "./pages/PhaseFGPages";
 import TransportPage from "./pages/TransportPage";
 
+const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
 function TopBar({ onSearch }: { onSearch: () => void }) {
   return (
     <header className="topbar">
@@ -41,94 +46,27 @@ function TopBar({ onSearch }: { onSearch: () => void }) {
       </Link>
       <div className="topbar-actions">
         <button type="button" className="btn btn-ghost" onClick={onSearch}>
-          Buscar <kbd className="topbar-kbd">⌘K</kbd>
+          Buscar <kbd className="topbar-kbd">{IS_MAC ? "⌘K" : "Ctrl K"}</kbd>
         </button>
       </div>
     </header>
   );
 }
 
-function groupModules(modules: ModuleMeta[]) {
-  return MODULE_GROUPS.map((g) => ({
-    group: g,
-    modules: modules.filter((m) => m.group === g),
-  })).filter((g) => g.modules.length);
-}
-
-function Home() {
-  const [q, setQ] = useState("");
-  const filtered = useMemo(() => searchModules(q), [q]);
-  const disabled = useMemo(() => searchDisabledModules(q), [q]);
-  const byGroup = groupModules(filtered);
-  const disabledByGroup = groupModules(disabled);
-
-  return (
-    <section>
-      <div className="home-hero">
-        <h1>¿Qué necesitas resolver?</h1>
-        <label className="search-field">
-          <span aria-hidden>⌕</span>
-          <input
-            autoFocus
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Busca un método o describe tu problema… (Vogel, húngaro, Markov, Monte Carlo, ruta crítica)"
-            aria-label="Buscar módulo"
-          />
-        </label>
-      </div>
-      {byGroup.map(({ group, modules }) => (
-        <div key={group} className="module-group">
-          <h2 className="module-group-title">{group}</h2>
-          <div className="module-grid">
-            {modules.map((m) => (
-              <Link key={m.slug} to={m.path} className="module-card">
-                <div className="module-card-name">
-                  {m.name}
-                  <span className="module-card-arrow">→</span>
-                </div>
-                <p className="module-card-methods">{m.methods}</p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      ))}
-      {!filtered.length && (
-        <p style={{ color: "var(--ink-400)" }}>No hay módulos que coincidan con “{q}”.</p>
-      )}
-      {disabled.length > 0 && (
-        <details className="disabled-modules">
-          <summary>
-            Módulos no disponibles
-            <span className="disabled-modules-count">{disabled.length}</span>
-          </summary>
-          <div className="disabled-modules-body">
-            <p className="disabled-modules-note">Aún no se pueden resolver. El listado es solo de referencia.</p>
-            {disabledByGroup.map(({ group, modules }) => (
-              <div key={group} className="module-group">
-                <h2 className="module-group-title">{group}</h2>
-                <div className="module-grid">
-                  {modules.map((m) => (
-                    <article key={m.slug} className="module-card is-soon" aria-disabled="true">
-                      <div className="module-card-name">
-                        {m.name}
-                        <span className="module-card-soon">No disponible</span>
-                      </div>
-                      <p className="module-card-methods">{m.methods}</p>
-                    </article>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-    </section>
-  );
-}
-
 export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
+  const location = useLocation();
+  const current = moduleByPath(location.pathname);
+
+  // Cada módulo abierto alimenta «Continúa donde te quedaste» y el avance de las rutas.
+  useEffect(() => {
+    if (current?.migrated) recordVisit(current.slug);
+  }, [current]);
+
+  // Al cambiar de página se empieza arriba, no a media pantalla del módulo anterior.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -146,7 +84,7 @@ export default function App() {
       <TopBar onSearch={() => setCmdOpen(true)} />
       <main className="app-main">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<HomePage />} />
           <Route path="/eoq" element={<EoqPage />} />
           <Route path="/lp" element={<LpPage />} />
           <Route path="/ilp" element={<IlpPage />} />
@@ -175,6 +113,7 @@ export default function App() {
           <Route path="/aggregate" element={<AggregatePage />} />
           <Route path="/facility" element={<FacilityPage />} />
         </Routes>
+        {current?.migrated ? <TrackNav slug={current.slug} /> : null}
       </main>
       <AppFooter />
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
