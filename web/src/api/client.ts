@@ -202,6 +202,11 @@ export const solveQss = qss.solve;
 export const exportQssXlsx = qss.exportXlsx;
 export const exportQssPdf = qss.exportPdf;
 
+const monteCarlo = bind("monte_carlo");
+export const solveMonteCarlo = monteCarlo.solve;
+export const exportMonteCarloXlsx = monteCarlo.exportXlsx;
+export const exportMonteCarloPdf = monteCarlo.exportPdf;
+
 const qp = bind("quadratic_programming");
 export const solveQp = qp.solve;
 export const exportQpXlsx = qp.exportXlsx;

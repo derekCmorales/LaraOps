@@ -72,7 +72,9 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
       payoff: [[0]],
       probabilities: [1],
     },
-    notes: "mode: payoff_table, decision_tree, bayes",
+    notes:
+      "mode: payoff_table, utility, decision_tree, bayes. sense: max (ganancias, por omisión) o min (costos, solo payoff_table). " +
+      "utility: {kind: linear|exponential|table, risk_tolerance}. bayes admite sample_cost. El árbol usa tree y root_id.",
   },
   game: {
     module: "game_theory",
@@ -133,8 +135,11 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
   markov: {
     module: "markov",
     title: "Cadenas de Markov",
-    required: ["states", "transition", "steps"],
+    required: ["states"],
     example: { states: ["A", "B"], transition: [[0.7, 0.3], [0.4, 0.6]], initial: [1, 0], steps: 5 },
+    notes:
+      "Cadena: transition (filas suman 1), initial, steps, n_power, rewards. " +
+      "Decisión markoviana: mode \"mdp\", decisions [{state, action, cost, transitions}], sense min|max, criterion average|discounted y discount.",
   },
   goal: {
     module: "goal_programming",
@@ -193,10 +198,36 @@ export const JSON_SCHEMAS: Record<string, JsonSchemaDoc> = {
     example: { plan: "attributes_single", N: 1000, n: 50, c: 2 },
   },
   qss: {
-    module: "queue_simulation",
+    module: "queuing_simulation",
     title: "Simulación de colas",
-    required: ["arrival_rate", "service_rate", "num_servers"],
-    example: { arrival_rate: 8, service_rate: 10, num_servers: 2, simulation_time: 500 },
+    required: ["arrival_rate", "service_rate", "num_servers", "simulation_time", "seed"],
+    example: {
+      arrival_rate: 4,
+      service_rate: 5,
+      num_servers: 1,
+      simulation_time: 800,
+      seed: 42,
+      warmup: 80,
+      capacity: null,
+    },
+    notes: "Llegadas y servicios exponenciales. capacity null = fila ilimitada. warmup es el tiempo que se descarta al inicio.",
+  },
+  monte_carlo: {
+    module: "monte_carlo",
+    title: "Simulación Monte Carlo",
+    required: ["mode", "seed"],
+    example: {
+      mode: "monte_carlo",
+      seed: 7,
+      replications: 2000,
+      variables: [
+        { name: "demanda", distribution: { family: "uniform", min: 40, max: 80 } },
+      ],
+      expression: "20 * min(demanda, 60) - 8 * 60",
+    },
+    notes:
+      "mode: rng (n; method lcg con a, c, m o mulberry32), variates (n y distribution) o monte_carlo (replications, variables, expression). " +
+      "Familias: uniform, exponential, normal, triangular, discrete, empirical. La fórmula admite + - * / ^, paréntesis y min, max, abs, sqrt, floor, ceil.",
   },
   aggregate: {
     module: "aggregate_planning",
@@ -253,6 +284,11 @@ export function validateModuleJson(slug: string, body: unknown): string | null {
   }
   if (slug === "decision" && obj.mode === "payoff_table") {
     if (!Array.isArray(obj.payoff)) return "En tabla de pagos, «payoff» debe ser una matriz.";
+  }
+  if (slug === "markov" && obj.mode === "mdp") {
+    if (!Array.isArray(obj.decisions)) return "En una decisión markoviana, «decisions» debe ser un arreglo.";
+  } else if (slug === "markov" && !Array.isArray(obj.transition)) {
+    return "Falta la matriz «transition».";
   }
   return null;
 }

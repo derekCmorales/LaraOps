@@ -145,11 +145,12 @@ function layoutCircle(
   nodes: { id: string }[],
   w: number,
   h: number,
+  radius = 0.36,
 ): Map<string, { x: number; y: number }> {
   const pos = new Map<string, { x: number; y: number }>();
   const cx = w / 2;
   const cy = h / 2;
-  const R = Math.min(w, h) * 0.36;
+  const R = Math.min(w, h) * radius;
   nodes.forEach((node, i) => {
     const a = (2 * Math.PI * i) / nodes.length - Math.PI / 2;
     pos.set(node.id, { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) });
@@ -224,6 +225,102 @@ function layoutNodes(
   return pos;
 }
 
+type Pt = { x: number; y: number };
+
+const NODE_R = 24;
+
+function edgeKey(source: string, target: string): string {
+  return `${source}\u0000${target}`;
+}
+
+function distToSegment(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * Trazo de un arco. Los lazos salen hacia fuera del dibujo; un par ida/vuelta se curva
+ * a lados opuestos; un arco recto que pasaría por encima de otro nodo también se curva.
+ */
+function edgeGeometry(
+  source: string,
+  target: string,
+  a: Pt,
+  b: Pt,
+  pos: Map<string, Pt>,
+  edgeSet: Set<string>,
+  undirected: boolean,
+  center: Pt,
+): { d: string; lx: number; ly: number } {
+  if (source === target) {
+    let ux = a.x - center.x;
+    let uy = a.y - center.y;
+    const ul = Math.hypot(ux, uy);
+    if (ul < 1) {
+      ux = 0;
+      uy = -1;
+    } else {
+      ux /= ul;
+      uy /= ul;
+    }
+    const spread = 0.42;
+    const rot = (x: number, y: number, ang: number) => ({
+      x: x * Math.cos(ang) - y * Math.sin(ang),
+      y: x * Math.sin(ang) + y * Math.cos(ang),
+    });
+    const d1 = rot(ux, uy, -spread);
+    const d2 = rot(ux, uy, spread);
+    const reach = 88;
+    const s = { x: a.x + d1.x * NODE_R, y: a.y + d1.y * NODE_R };
+    const e = { x: a.x + d2.x * (NODE_R + 4), y: a.y + d2.y * (NODE_R + 4) };
+    const c1 = { x: a.x + rot(ux, uy, -spread * 1.1).x * reach, y: a.y + rot(ux, uy, -spread * 1.1).y * reach };
+    const c2 = { x: a.x + rot(ux, uy, spread * 1.1).x * reach, y: a.y + rot(ux, uy, spread * 1.1).y * reach };
+    return {
+      d: `M${s.x},${s.y} C${c1.x},${c1.y} ${c2.x},${c2.y} ${e.x},${e.y}`,
+      lx: a.x + ux * (reach * 0.7 + 12),
+      ly: a.y + uy * (reach * 0.7 + 12),
+    };
+  }
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  let bend = 0;
+  if (!undirected && edgeSet.has(edgeKey(target, source))) bend = 0.16;
+  for (const [id, p] of pos) {
+    if (id === source || id === target) continue;
+    if (distToSegment(p, a, b) < NODE_R + 6) {
+      bend = Math.max(bend, 0.28);
+      break;
+    }
+  }
+  if (bend === 0) {
+    const x1 = a.x + (dx / len) * NODE_R;
+    const y1 = a.y + (dy / len) * NODE_R;
+    const x2 = b.x - (dx / len) * (NODE_R - 2);
+    const y2 = b.y - (dy / len) * (NODE_R - 2);
+    return { d: `M${x1},${y1} L${x2},${y2}`, lx: (a.x + b.x) / 2, ly: (a.y + b.y) / 2 - 9 };
+  }
+  // Perpendicular a la izquierda del sentido a→b: el arco de vuelta queda al otro lado.
+  const px = -dy / len;
+  const py = dx / len;
+  const offset = Math.max(bend * len, 30);
+  const c = { x: (a.x + b.x) / 2 + px * offset, y: (a.y + b.y) / 2 + py * offset };
+  const toward = (from: Pt, to: Pt, r: number) => {
+    const l = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+    return { x: from.x + ((to.x - from.x) / l) * r, y: from.y + ((to.y - from.y) / l) * r };
+  };
+  const s = toward(a, c, NODE_R);
+  const e = toward(b, c, NODE_R - 2);
+  return {
+    d: `M${s.x},${s.y} Q${c.x},${c.y} ${e.x},${e.y}`,
+    lx: 0.25 * a.x + 0.5 * c.x + 0.25 * b.x,
+    ly: 0.25 * a.y + 0.5 * c.y + 0.25 * b.y,
+  };
+}
+
 function edgeCaption(e: {
   weight?: number;
   flow?: number;
@@ -271,6 +368,10 @@ function ChartShell({
   );
 }
 
+function isEnvelope(name: string): boolean {
+  return /^envolvente/i.test(name);
+}
+
 function GraphXYView({ result }: { result: ModuleResult }) {
   const graph = result.graph as Graph;
   if (!graph?.series?.length) {
@@ -303,22 +404,28 @@ function GraphXYView({ result }: { result: ModuleResult }) {
     return row;
   });
 
-  const seriesMeta = graph.series.map((s, i) => ({
-    key: labelOf(s.name),
-    raw: s.name,
-    color: isLimitSeries(s.name)
-      ? s.name.toLowerCase().includes("ucl") || s.name.toLowerCase().includes("lcl")
-        ? C.pivot
-        : C.warn
-      : SERIES_COLORS[i % SERIES_COLORS.length],
-    dashed: isLimitSeries(s.name),
-    primary: !isLimitSeries(s.name),
-  }));
-
   // Punto óptimo / Q* / BEP
-  const optSeries = graph.series.find((s) =>
-    /optimum|optimo|óptimo|q\*|q_star|bep/i.test(s.name)
-  );
+  const isOptimum = (name: string) => /optimum|optimo|óptimo|q\*|q_star|bep/i.test(name);
+  const optSeries = graph.series.find((s) => isOptimum(s.name));
+
+  const seriesMeta = graph.series
+    .map((s, i) => ({
+      key: labelOf(s.name),
+      raw: s.name,
+      color: isLimitSeries(s.name)
+        ? s.name.toLowerCase().includes("ucl") || s.name.toLowerCase().includes("lcl")
+          ? C.pivot
+          : C.warn
+        : isEnvelope(s.name)
+          ? C.pivot
+          : SERIES_COLORS[i % SERIES_COLORS.length],
+      dashed: isLimitSeries(s.name),
+      envelope: isEnvelope(s.name),
+      primary: !isLimitSeries(s.name),
+      single: s.x.length === 1,
+    }))
+    // Un punto suelto (el óptimo) va como marca, no como serie con leyenda.
+    .filter((s) => !(s.single && isOptimum(s.raw)));
   const qStar = result.solution.metrics.Q_star ?? result.solution.variables.Q;
   const bep = result.solution.metrics.BEP_units ?? result.solution.variables.BEP_units;
   // EOQ: punto mínimo sobre la curva de costo relevante.
@@ -371,13 +478,14 @@ function GraphXYView({ result }: { result: ModuleResult }) {
             ) : (
               <Line
                 key={s.key}
-                type={control || s.dashed ? "linear" : "monotone"}
+                type={control || s.dashed || s.envelope ? "linear" : "monotone"}
                 dataKey={s.key}
                 stroke={s.color}
                 name={s.key}
-                strokeWidth={s.dashed ? 1.5 : 2.25}
+                strokeWidth={s.dashed ? 1.5 : s.envelope ? 4 : 2.25}
+                strokeOpacity={s.envelope ? 0.55 : 1}
                 strokeDasharray={s.dashed ? "6 4" : undefined}
-                dot={!s.dashed && (graph.series!.find((x) => labelOf(x.name) === s.key)?.x.length ?? 0) <= 16}
+                dot={!s.dashed && !s.envelope && (graph.series!.find((x) => labelOf(x.name) === s.key)?.x.length ?? 0) <= 16}
                 connectNulls
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
@@ -419,7 +527,7 @@ function GraphXYView({ result }: { result: ModuleResult }) {
               fill={C.pivot}
               stroke={C.paper}
               strokeWidth={2}
-              label={{ value: "Óptimo", position: "top", fill: C.pivot, fontSize: 11 }}
+              label={{ value: `Óptimo (${fmt(optSeries.x[0])}; ${fmt(optSeries.y[0])})`, position: "top", fill: C.pivot, fontSize: 11 }}
             />
           )}
         </Chart>
@@ -618,9 +726,14 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
   }[];
 
   const w = 640;
-  const h = Math.max(300, 40 + nodes.length * 28);
+  const loops = edges.some((e) => e.source === e.target);
+  const h = Math.max(loops ? 420 : 300, 40 + nodes.length * 28);
   const undirected = (graph as { directed?: boolean }).directed === false;
-  const pos = undirected && nodes.length > 2 ? layoutCircle(nodes, w, h) : layoutNodes(nodes, edges, w, h);
+  // Una cadena de Markov casi nunca es un DAG: en capas los arcos se enciman, en círculo se leen.
+  const circular = nodes.length > 2 && (undirected || result.module === "markov");
+  const pos = circular ? layoutCircle(nodes, w, h, loops ? 0.27 : 0.36) : layoutNodes(nodes, edges, w, h);
+  const edgeSet = new Set(edges.map((e) => edgeKey(e.source, e.target)));
+  const center = { x: w / 2, y: h / 2 };
   const title = chartTitle(graph, result.module);
   const subtitle =
     graph.subtitle ||
@@ -667,36 +780,28 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
           const crit = e.critical || e.min_cut;
           const stroke = crit ? C.pivot : hasFlowE ? C.basic : C.grid;
           const marker = undirected ? undefined : crit ? "url(#arrow-crit)" : hasFlowE ? "url(#arrow-flow)" : "url(#arrow)";
-          const mx = (a.x + b.x) / 2;
-          const my = (a.y + b.y) / 2;
           const cap = edgeCaption(e);
-          // acortar línea para no tapar el nodo
-          const dx = b.x - a.x;
-          const dy = b.y - a.y;
-          const len = Math.hypot(dx, dy) || 1;
-          const shrink = 22;
-          const x1 = a.x + (dx / len) * shrink;
-          const y1 = a.y + (dy / len) * shrink;
-          const x2 = b.x - (dx / len) * shrink;
-          const y2 = b.y - (dy / len) * shrink;
+          const geo = edgeGeometry(e.source, e.target, a, b, pos, edgeSet, undirected, center);
           return (
             <g key={i}>
-              <line
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
+              <path
+                d={geo.d}
+                fill="none"
                 stroke={stroke}
                 strokeWidth={crit || hasFlowE ? 2.5 : 1.5}
                 markerEnd={marker}
               />
               {cap && (
                 <text
-                  x={mx}
-                  y={my - 6}
+                  x={geo.lx}
+                  y={geo.ly}
                   fontSize="11"
                   fill={C.ink}
+                  stroke={C.paper}
+                  strokeWidth={3}
+                  paintOrder="stroke"
                   textAnchor="middle"
+                  dominantBaseline="middle"
                   style={{ fontFamily: "IBM Plex Mono, monospace" }}
                 >
                   {cap}

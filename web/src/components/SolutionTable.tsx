@@ -23,40 +23,43 @@ export default function SolutionTable({
   textColumns = [0],
   activeRowIndexes = [],
 }: Props) {
+  // Una tabla ancha se desplaza dentro de su caja; la página no debe moverse de lado en el teléfono.
   return (
-    <table className="data-table">
-      {caption ? <caption className="section-label">{caption}</caption> : null}
-      <thead>
-        <tr>
-          {columns.map((c, j) => (
-            <th key={`${c}-${j}`} scope="col" className={textColumns.includes(j) ? "col-text" : undefined}>
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, i) => (
-          <tr key={i}>
-            {row.map((cell, j) => (
-              <td
-                key={j}
-                className={[
-                  textColumns.includes(j) ? "col-text" : "",
-                  activeRowIndexes.includes(i) ? "cell-active" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                {fmt(cell)}
-                {activeRowIndexes.includes(i) && j === 0 ? (
-                  <span className="cell-active-label"> (activa)</span>
-                ) : null}
-              </td>
+    <div className="table-scroll">
+      <table className="data-table">
+        {caption ? <caption className="section-label">{caption}</caption> : null}
+        <thead>
+          <tr>
+            {columns.map((c, j) => (
+              <th key={`${c}-${j}`} scope="col" className={textColumns.includes(j) ? "col-text" : undefined}>
+                {c}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              {row.map((cell, j) => (
+                <td
+                  key={j}
+                  className={[
+                    textColumns.includes(j) ? "col-text" : "",
+                    activeRowIndexes.includes(i) ? "cell-active" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  {fmt(cell)}
+                  {activeRowIndexes.includes(i) && j === 0 ? (
+                    <span className="cell-active-label"> (activa)</span>
+                  ) : null}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
