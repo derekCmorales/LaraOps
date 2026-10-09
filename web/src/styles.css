@@ -1397,6 +1397,12 @@ textarea {
   min-width: 72px;
 }
 
+/* Sin un ancho base, las casillas toman el ancho natural del input (~190 px) y la tabla se desborda. */
+.matrix-editor tbody td,
+.matrix-editor tbody th {
+  width: 84px;
+}
+
 .matrix-editor th {
   background: var(--ink-100);
   font-size: var(--text-caption);
@@ -1408,6 +1414,8 @@ textarea {
 
 .matrix-cell {
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: none;
   padding: calc(var(--space) * 2) calc(var(--space) * 2.5);
   background: transparent;
@@ -1429,6 +1437,8 @@ textarea {
 
 .matrix-node {
   width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: none;
   background: transparent;
   text-align: center;
@@ -1586,6 +1596,18 @@ textarea {
   width: 100%;
   border: var(--border);
   background: var(--paper-raised);
+}
+
+/* En pantallas angostas el grafo conserva un tamaño legible y se desplaza a los lados. */
+@media (max-width: 640px) {
+  .chart-wrap:has(> .network-svg) {
+    overflow-x: auto;
+    padding: calc(var(--space) * 1);
+  }
+
+  .network-svg {
+    min-width: 560px;
+  }
 }
 
 .export-menu {

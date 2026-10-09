@@ -28,8 +28,18 @@ const META_SKIP = new Set([
   "pruned_reason",
 ]);
 
+/** Algoritmos de redes: no tienen tableau del simplex ni Z, y explican cada paso en `meta.regla`. */
+const NETWORK_METHODS = new Set([
+  "dijkstra",
+  "bellman_ford",
+  "kruskal",
+  "edmonds_karp",
+  "network_simplex",
+  "tsp_heuristic",
+]);
+
 function MetaPanel({ meta }: { meta: Record<string, unknown> }) {
-  const entries = Object.entries(meta).filter(([k]) => !META_SKIP.has(k));
+  const entries = Object.entries(meta).filter(([k, v]) => !META_SKIP.has(k) && v !== undefined);
   if (!entries.length) {
     return <p className="field-hint">Sin detalle adicional en este paso.</p>;
   }
@@ -126,7 +136,10 @@ export default function IterationsViewer({ steps }: Props) {
   const z = meta.z ?? meta.relaxation_objective ?? meta.objective;
   const isLast = idx === sorted.length - 1;
 
+  const isNet = NETWORK_METHODS.has(step.method);
+  const panelMeta = isNet && typeof meta.regla === "string" ? { ...meta, regla: undefined } : meta;
   const why =
+    (isNet && typeof meta.regla === "string" ? (meta.regla as string) : "") ||
     (meta.pruned_reason as string) ||
     (isLast && !enter
       ? "No hay variable que mejore Z. Este es el tableau óptimo; el valor final está en la banda de estado."
@@ -145,11 +158,11 @@ export default function IterationsViewer({ steps }: Props) {
         {sorted.map((s, si) => (
           <details key={s.index} open={si === sorted.length - 1}>
             <summary>
-              Paso {s.index + 1}: {methodLabel(s.method)} — {translateTitle(s.title)}
-              {si === sorted.length - 1 ? " · óptimo" : ""}
+              Paso {si + 1}: {methodLabel(s.method)} — {translateTitle(s.title)}
+              {si === sorted.length - 1 ? (NETWORK_METHODS.has(s.method) ? " · final" : " · óptimo") : ""}
             </summary>
             {s.tableau ? (
-              <Tableau table={s.tableau} flash={new Set()} pivot={null} caption={`Iteración ${s.index + 1}`} />
+              <Tableau table={s.tableau} flash={new Set()} pivot={null} caption={`Iteración ${si + 1}`} />
             ) : (
               <MetaPanel meta={(s.meta || {}) as Record<string, unknown>} />
             )}
@@ -167,7 +180,7 @@ export default function IterationsViewer({ steps }: Props) {
           <dt>Iteración</dt>
           <dd>
             {idx + 1} de {sorted.length}
-            {isLast ? " · óptima" : " · intermedia"}
+            {isLast ? (isNet ? " · final" : " · óptima") : " · intermedia"}
           </dd>
           <dt>Método</dt>
           <dd>{methodLabel(step.method)}</dd>
@@ -191,7 +204,7 @@ export default function IterationsViewer({ steps }: Props) {
               </dd>
             </>
           )}
-          {z != null && (
+          {z != null && !isNet && (
             <>
               <dt>Z de esta iteración</dt>
               <dd>{Number(z).toLocaleString("es-MX", { maximumFractionDigits: 4 })}</dd>
@@ -200,11 +213,12 @@ export default function IterationsViewer({ steps }: Props) {
         </dl>
         {!isLast ? (
           <p className="iter-step-note">
-            Paso intermedio. El óptimo está en el último tableau; Z final aparece arriba en la
-            banda de estado.
+            {isNet
+              ? "Paso intermedio. El resultado final está en el último paso."
+              : "Paso intermedio. El óptimo está en el último tableau; Z final aparece arriba en la banda de estado."}
           </p>
         ) : (
-          <p className="iter-step-note iter-step-note--opt">Tableau óptimo.</p>
+          <p className="iter-step-note iter-step-note--opt">{isNet ? "Último paso: resultado final." : "Tableau óptimo."}</p>
         )}
         <div className="iter-why">
           <strong>¿Por qué?</strong>
@@ -224,10 +238,12 @@ export default function IterationsViewer({ steps }: Props) {
               pivot={pivot}
               caption={`Tabla — iteración ${idx + 1}`}
             />
-            {Object.keys(meta).some((k) => !META_SKIP.has(k)) ? <MetaPanel meta={meta} /> : null}
+            {Object.entries(panelMeta).some(([k, v]) => !META_SKIP.has(k) && v !== undefined) ? (
+              <MetaPanel meta={panelMeta} />
+            ) : null}
           </>
         ) : (
-          <MetaPanel meta={meta} />
+          <MetaPanel meta={panelMeta} />
         )}
 
         <div className="iter-scrubber">

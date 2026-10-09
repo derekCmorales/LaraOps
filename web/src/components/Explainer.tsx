@@ -211,30 +211,31 @@ function explain(result: ModuleResult): string {
       `La cantidad económica de pedido es Q* = ${Number(q).toLocaleString("es-MX", { maximumFractionDigits: 2 })}.`
     );
   }
+  const table = (name: string) => result.tables?.find((t) => t.name === name);
   if (metrics.path_length != null && Number.isFinite(Number(metrics.path_length))) {
+    const route = table("ruta")?.rows.map((r) => String(r[1])).join(" → ");
     bits.push(
-      `La ruta más corta tiene longitud ${Number(metrics.path_length).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+      `${route ? `La ruta más corta es ${route} y` : "La ruta más corta"} tiene longitud ${fmtNum(metrics.path_length)}.`
     );
   }
   if (metrics.mst_weight != null && Number.isFinite(Number(metrics.mst_weight))) {
+    const n = table("aristas_mst")?.rows.length;
     bits.push(
-      `El árbol de expansión mínima pesa ${Number(metrics.mst_weight).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
+      `El árbol de expansión mínima${n ? ` usa ${n} aristas y` : ""} pesa ${fmtNum(metrics.mst_weight)}: es la forma más barata de conectar todos los nodos sin ciclos.`
     );
   }
   if (metrics.max_flow != null && Number.isFinite(Number(metrics.max_flow))) {
-    bits.push(
-      `El flujo máximo es ${Number(metrics.max_flow).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
-    );
+    bits.push(`El flujo máximo del origen al destino es ${fmtNum(metrics.max_flow)}.`);
   }
   if (metrics.min_cut_value != null && Number.isFinite(Number(metrics.min_cut_value))) {
+    const cut = table("min_cut")?.rows.map((r) => `${r[0]} → ${r[1]}`).join(", ");
     bits.push(
-      `El corte mínimo vale ${Number(metrics.min_cut_value).toLocaleString("es-MX", { maximumFractionDigits: 4 })} (teorema max-flow min-cut).`
+      `El corte mínimo vale ${fmtNum(metrics.min_cut_value)} (teorema max-flow min-cut)${cut ? `: los arcos que lo forman, ${cut}, son el cuello de botella; aumentar su capacidad es la única forma de enviar más` : ""}.`
     );
   }
   if (metrics.tour_length != null && Number.isFinite(Number(metrics.tour_length))) {
-    bits.push(
-      `El recorrido del viajante tiene longitud ${Number(metrics.tour_length).toLocaleString("es-MX", { maximumFractionDigits: 4 })}.`
-    );
+    const route = table("recorrido")?.rows.map((r) => String(r[1])).join(" → ");
+    bits.push(`El recorrido del viajante${route ? ` es ${route} y` : ""} tiene longitud ${fmtNum(metrics.tour_length)}.`);
   }
   if (result.module === "networks" && metrics.total_cost != null && Number.isFinite(Number(metrics.total_cost))) {
     bits.push(

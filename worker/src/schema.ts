@@ -39,6 +39,10 @@ export type GraphNetwork = {
   title?: string;
   subtitle?: string;
   directed?: boolean;
+  /** "circle" dibuja los nodos en el orden dado, uno tras otro, sobre un círculo. */
+  layout?: "circle" | "layers";
+  /** Leyenda propia del gráfico; tone: crit (magenta), flow (azul), warn (ámbar), idle (gris). */
+  legend?: { label: string; tone: "crit" | "flow" | "warn" | "idle" }[];
 };
 
 export type GraphGantt = {

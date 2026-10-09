@@ -119,6 +119,7 @@ const NETWORK_TABLES = new Set([
   "balance_nodos",
   "oferta_sin_enviar",
   "min_cut",
+  "conjuntos_corte",
   "recorrido",
 ]);
 
@@ -130,7 +131,9 @@ function nodeTextColumns(columns: string[]): number[] {
 
 function GenericSolutionPane({ result }: Props) {
   const mirrored = metricsCopyVariables(result);
-  const showVariables = Object.keys(result.solution.variables).length > 0 && !mirrored;
+  const isNetwork = result.module === "networks";
+  // En redes las variables repiten lo que ya dicen las tablas de flujos / aristas / ruta.
+  const showVariables = !isNetwork && Object.keys(result.solution.variables).length > 0 && !mirrored;
   return (
     <div>
       {result.warnings?.length > 0 && (
@@ -140,6 +143,7 @@ function GenericSolutionPane({ result }: Props) {
           ))}
         </ul>
       )}
+      {isNetwork && result.graph ? <ChartViews result={result} /> : null}
       {showVariables ? (
         <SolutionTable
           caption="Variables"
@@ -266,7 +270,7 @@ export default function ResultsTabs({ result }: Props) {
     if (isQueues) {
       list.push({ id: "formulas", label: "Fórmulas", content: <QueuesFormulas result={result} /> });
       list.push({ id: "graph", label: "Gráficos", content: <QueuesCharts result={result} /> });
-    } else if (result.graph) {
+    } else if (result.graph && result.module !== "networks") {
       list.push({
         id: "graph",
         label: result.module === "eoq" ? "Gráficos" : "Gráfico",
@@ -289,7 +293,7 @@ export default function ResultsTabs({ result }: Props) {
       });
     }
     // Transporte, PL y colas ya muestran sus tablas en sus propias vistas; no se repiten.
-    if (result.tables?.length && !isTransport && !isLp && !isQueues) {
+    if (result.tables?.length && !isTransport && !isLp && !isQueues && result.module !== "networks") {
       list.push({
         id: "tables",
         label: "Tablas",

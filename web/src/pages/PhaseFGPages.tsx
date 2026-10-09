@@ -528,12 +528,30 @@ function exampleForProblem(problem: string): NetworkExample {
   return NET_EX;
 }
 
+const DIRECTED_PROBLEMS = new Set(["shortest_path", "max_flow"]);
+
+function problemBlurb(problem: string): string {
+  if (problem === "shortest_path") {
+    return "Camino de menor costo total entre un origen y un destino (Dijkstra; con pesos negativos, Bellman-Ford).";
+  }
+  if (problem === "mst") {
+    return "Conecta todos los nodos con el menor peso total y sin ciclos (Kruskal). La red no tiene dirección.";
+  }
+  if (problem === "max_flow") {
+    return "Cuánto puede circular del origen al destino sin pasar la capacidad de ningún arco (caminos de aumento) y dónde está el cuello de botella (corte mínimo).";
+  }
+  if (problem === "transshipment") {
+    return "Envía de los nodos oferta a los nodos demanda al menor costo, pasando por nodos de transbordo (simplex de redes).";
+  }
+  return "Recorrido de menor longitud que visita cada ciudad una vez y regresa al inicio (exacto hasta 10 ciudades; heurística hasta 25).";
+}
+
 function matrixHint(problem: string): string {
   if (problem === "mst") {
     return "Peso de la arista entre la fila y la columna. Vacío = sin conexión. Al ser no dirigido, el otro lado se copia solo.";
   }
   if (problem === "max_flow") {
-    return "Capacidad del arco fila → columna. Vacío = ese arco no existe.";
+    return "Capacidad del arco fila → columna. Vacío = ese arco no existe. Si la red no es dirigida, la capacidad vale en ambos sentidos.";
   }
   if (problem === "transshipment") {
     return "Costo unitario del arco fila → columna. En Oferta: positivo es oferta, negativo es demanda y 0 es transbordo. Se resuelve con el método simplex de redes.";
@@ -566,7 +584,7 @@ function applyNetworkExample(ex: NetworkExample) {
     supply: nodes.map((n) => ex.node_supply?.[n] ?? 0),
     source: nodes.includes(ex.source) ? ex.source : nodes[0] ?? "",
     sink: nodes.includes(ex.sink) ? ex.sink : nodes[nodes.length - 1] ?? "",
-    directed: ex.problem === "shortest_path" ? ex.directed !== false : ex.problem !== "mst" && ex.problem !== "tsp",
+    directed: DIRECTED_PROBLEMS.has(ex.problem) ? ex.directed !== false : ex.problem !== "mst" && ex.problem !== "tsp",
     symmetricCosts: false,
     symmetricTsp: false,
     tspMethod: ex.tsp_method === "heuristic" || ex.tsp_method === "exact" ? ex.tsp_method : "auto",
@@ -594,10 +612,10 @@ export function NetworksPage() {
   const needsTerminals = problem === "shortest_path" || problem === "max_flow";
   const symmetric =
     isMst ||
-    (problem === "shortest_path" && !directed) ||
+    (DIRECTED_PROBLEMS.has(problem) && !directed) ||
     (isTrans && symmetricCosts) ||
     (isTsp && symmetricTsp);
-  const upperOnly = isMst || (problem === "shortest_path" && !directed);
+  const upperOnly = isMst || (DIRECTED_PROBLEMS.has(problem) && !directed);
   const supplySum = supply.reduce((acc, n) => acc + (Number.isFinite(n) ? n : 0), 0);
 
   function changeProblem(next: string) {
@@ -700,6 +718,7 @@ export function NetworksPage() {
           if (!nodes.includes(source) || !nodes.includes(sink)) {
             throw new Error("elige origen y destino entre los nodos");
           }
+          if (source === sink) throw new Error("el origen y el destino deben ser nodos distintos");
           body.source = source;
           body.sink = sink;
         }
@@ -748,7 +767,7 @@ export function NetworksPage() {
         setSupply(nodesNext.map((n) => b.node_supply?.[n] ?? 0));
         setSource(b.source && nodesNext.includes(b.source) ? b.source : nodesNext[0] ?? "");
         setSink(b.sink && nodesNext.includes(b.sink) ? b.sink : nodesNext[nodesNext.length - 1] ?? "");
-        setDirected(problemNext === "shortest_path" ? b.directed !== false : problemNext !== "mst" && problemNext !== "tsp");
+        setDirected(DIRECTED_PROBLEMS.has(problemNext) ? b.directed !== false : problemNext !== "mst" && problemNext !== "tsp");
         setSymmetricCosts(problemNext === "transshipment" && b.directed === false);
         setSymmetricTsp(false);
         setTspMethod(b.tsp_method === "heuristic" || b.tsp_method === "exact" ? b.tsp_method : "auto");
@@ -797,7 +816,8 @@ export function NetworksPage() {
             />
           )}
         </FieldGrid>
-        {problem === "shortest_path" && (
+        <p className="field-hint">{problemBlurb(problem)}</p>
+        {DIRECTED_PROBLEMS.has(problem) && (
           <label className="field-checkbox">
             <input
               type="checkbox"
@@ -808,7 +828,7 @@ export function NetworksPage() {
                 if (!next) setWeights((prev) => symmetrize(prev, null));
               }}
             />
-            Grafo dirigido
+            {problem === "max_flow" ? "Red dirigida (cada arco solo lleva flujo de fila a columna)" : "Grafo dirigido"}
           </label>
         )}
         {isTrans && (
