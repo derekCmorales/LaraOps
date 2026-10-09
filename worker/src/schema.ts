@@ -65,12 +65,30 @@ export type GraphMatrix = {
 
 export type GraphPayload = GraphXY | GraphNetwork | GraphGantt | GraphMatrix;
 
+/**
+ * Cuadro del grafo en un paso de iteración (solo redes). Los arreglos van alineados con
+ * `graph.nodes` / `graph.edges` del resultado, salvo `edges`, que reemplaza todas las aristas.
+ * `edge_flow` va en el sentido del arco del gráfico; un valor negativo significa sentido contrario.
+ */
+export type IterationView = {
+  node_tone?: (("crit" | "flow" | "warn" | "idle") | null)[];
+  node_sub?: (string | null)[];
+  edge_flow?: number[];
+  edge_on?: boolean[];
+  edge_hot?: boolean[];
+  edge_dashed?: boolean[];
+  edges?: Record<string, unknown>[];
+  subtitle?: string;
+  legend?: { label: string; tone: "crit" | "flow" | "warn" | "idle" }[];
+};
+
 export type IterationStep = {
   index: number;
   method: string;
   title: string;
   tableau: (number | string)[][] | null;
   meta: Record<string, unknown>;
+  view?: IterationView | null;
 };
 
 export type ModuleResult = {

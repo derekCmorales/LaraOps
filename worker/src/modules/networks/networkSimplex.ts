@@ -12,8 +12,12 @@ export type NetworkSimplexResult = {
   potentials: Record<string, number>;
   reduced: number[];
   iterations: IterationStep[];
+  /** Estado de los arcos reales al inicio de cada iteración (alineado con `iterations`). */
+  frames: SimplexFrame[];
   warnings: string[];
 };
+
+export type SimplexFrame = { flow: number[]; tree: boolean[]; enter: number; leave: number };
 
 const ROOT = "__raiz";
 const EPS = 1e-9;
@@ -69,6 +73,7 @@ export function networkSimplex(
   }
   const allNodes = [...nodes, ROOT];
   const iterations: IterationStep[] = [];
+  const frames: SimplexFrame[] = [];
   const warnings: string[] = [];
   const seen = new Set<string>();
   let bland = false;
@@ -140,8 +145,15 @@ export function networkSimplex(
     const header = ["Arco", "Costo", "Capacidad", "Flujo", "En el árbol", "Costo reducido"];
     const potText = nodes.map((n) => `${n}: ${fmtM(potentials[n])}`).join(", ");
 
+    const frame = (enterIdx: number, leaveIdx: number): SimplexFrame => ({
+      flow: flow.slice(0, arcsIn.length).map(clean),
+      tree: inTree.slice(0, arcsIn.length),
+      enter: enterIdx >= 0 && enterIdx < arcsIn.length ? enterIdx : -1,
+      leave: leaveIdx >= 0 && leaveIdx < arcsIn.length ? leaveIdx : -1,
+    });
     if (enter < 0) {
       if (record) {
+        frames.push(frame(-1, -1));
         iterations.push({
           index: iterations.length,
           method: "network_simplex",
@@ -201,6 +213,7 @@ export function networkSimplex(
         potentials: numeric(potentials),
         reduced: reduced.slice(0, arcsIn.length).map((r) => r.a),
         iterations,
+        frames,
         warnings: [
           `Hay un ciclo de costo negativo sin límite de capacidad (entra ${ea.label}): el costo puede bajar indefinidamente.`,
         ],
@@ -211,6 +224,7 @@ export function networkSimplex(
       .map((c) => `${arcs[c.arc].label}${c.forward ? " (+)" : " (−)"}`)
       .join(", ");
     if (record) {
+      frames.push(frame(enter, leave));
       iterations.push({
         index: iterations.length,
         method: "network_simplex",
@@ -258,6 +272,7 @@ export function networkSimplex(
       potentials: numeric(potentials),
       reduced: reduced.slice(0, arcsIn.length).map((r) => r.a),
       iterations,
+      frames,
       warnings: [
         `No hay forma de cumplir todas las ofertas y demandas con estos arcos y capacidades (quedan sin atender: ${stuck.join(", ")}).`,
       ],
@@ -270,6 +285,7 @@ export function networkSimplex(
     potentials: numeric(potentials),
     reduced: reduced.slice(0, arcsIn.length).map((r) => r.a),
     iterations,
+    frames,
     warnings,
   };
 }
