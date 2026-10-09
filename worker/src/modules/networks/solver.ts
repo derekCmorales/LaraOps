@@ -119,7 +119,7 @@ function shortest(req: NetworksRequest): ModuleResult {
   }
   if (!req.edges.length) throw new SolverError("las aristas son obligatorias para ruta más corta");
   assertEdgesKnown(req);
-  const { dist, prev, steps } = shortestPaths(req.nodes, req.edges, req.source, req.directed, req.sink);
+  const { dist, prev, steps, snaps } = shortestPaths(req.nodes, req.edges, req.source, req.directed, req.sink);
   const negative = req.edges.some((e) => e.weight < 0);
   if (!(req.sink in dist) || dist[req.sink] === Infinity) {
     throw new SolverError(`No hay ruta de ${req.source} a ${req.sink}`);
@@ -136,6 +136,54 @@ function shortest(req: NetworksRequest): ModuleResult {
   path.reverse();
   const length = dist[req.sink];
   const edgeSet = new Set(path.slice(0, -1).map((u, i) => arcKey(u, path[i + 1])));
+  const graphEdges = req.edges
+    .filter((e) => e.source !== e.target)
+    .map((e) => ({
+      source: e.source,
+      target: e.target,
+      weight: e.weight,
+      // Solo se resalta el arco que realmente usa la ruta (no uno paralelo más caro).
+      critical:
+        (edgeSet.has(arcKey(e.source, e.target)) && Math.abs(dist[e.source] + e.weight - dist[e.target]) <= 1e-9) ||
+        (!req.directed &&
+          edgeSet.has(arcKey(e.target, e.source)) &&
+          Math.abs(dist[e.target] + e.weight - dist[e.source]) <= 1e-9),
+    }));
+  // Cuadro del grafo en cada paso: nodos con distancia conocida y el árbol de rutas hallado hasta ese momento.
+  const tightEdge = (u: string, v: string, d: Record<string, number>) =>
+    graphEdges.findIndex(
+      (e) =>
+        ((e.source === u && e.target === v) || (!req.directed && e.source === v && e.target === u)) &&
+        Math.abs(d[u] + e.weight - d[v]) <= 1e-9,
+    );
+  steps.forEach((st, i) => {
+    const { dist: d, prev: pv, newest } = snaps[i];
+    const on = graphEdges.map(() => false);
+    const hot = graphEdges.map(() => false);
+    for (const v of req.nodes) {
+      const u = pv[v];
+      if (u == null) continue;
+      const k = tightEdge(u, v, d);
+      if (k < 0) continue;
+      if (newest.includes(v)) hot[k] = true;
+      else on[k] = true;
+    }
+    st.view = {
+      node_tone: req.nodes.map((n) => (newest.includes(n) ? "crit" : Number.isFinite(d[n]) ? "flow" : null)),
+      node_sub: req.nodes.map((n) => (Number.isFinite(d[n]) ? (n === req.source ? "origen · 0" : `d = ${formatMetric(d[n])}`) : null)),
+      edge_on: on,
+      edge_hot: hot,
+      subtitle:
+        st.method === "dijkstra"
+          ? `Nodos resueltos: ${String(st.meta.resueltos)}`
+          : `Pasada ${i + 1} de Bellman-Ford · actualizados: ${newest.join(", ")}`,
+      legend: [
+        { label: st.method === "dijkstra" ? "Nodo recién resuelto" : "Distancia actualizada en esta pasada", tone: "crit" },
+        { label: "Nodo con distancia conocida y su mejor arco", tone: "flow" },
+        { label: "Aún sin distancia", tone: "idle" },
+      ],
+    };
+  });
   const graph: GraphNetwork = {
     type: "network",
     directed: req.directed,
@@ -144,19 +192,7 @@ function shortest(req: NetworksRequest): ModuleResult {
       critical: path.includes(n),
       kind: n === req.source ? "origen" : n === req.sink ? "destino" : path.includes(n) ? "en la ruta" : undefined,
     })),
-    edges: req.edges
-      .filter((e) => e.source !== e.target)
-      .map((e) => ({
-        source: e.source,
-        target: e.target,
-        weight: e.weight,
-        // Solo se resalta el arco que realmente usa la ruta (no uno paralelo más caro).
-        critical:
-          (edgeSet.has(arcKey(e.source, e.target)) && Math.abs(dist[e.source] + e.weight - dist[e.target]) <= 1e-9) ||
-          (!req.directed &&
-            edgeSet.has(arcKey(e.target, e.source)) &&
-            Math.abs(dist[e.target] + e.weight - dist[e.source]) <= 1e-9),
-      })),
+    edges: graphEdges,
     title: "Ruta más corta",
     subtitle: `${path.join(" → ")} · longitud = ${formatMetric(length)}`,
     legend: [
@@ -247,13 +283,22 @@ function arcsOf(edges: NetworkEdge[], directed: boolean): { u: string; v: string
   return arcs;
 }
 
+/** Estado del algoritmo tras cada paso: sirve para dibujar el grafo en esa iteración. */
+type ShortestSnap = { dist: Record<string, number>; prev: Record<string, string | undefined>; newest: string[] };
+type ShortestResult = {
+  dist: Record<string, number>;
+  prev: Record<string, string | undefined>;
+  steps: IterationStep[];
+  snaps: ShortestSnap[];
+};
+
 function shortestPaths(
   nodes: string[],
   edges: NetworkEdge[],
   source: string,
   directed: boolean,
   sink: string,
-): { dist: Record<string, number>; prev: Record<string, string | undefined>; steps: IterationStep[] } {
+): ShortestResult {
   const arcs = arcsOf(edges, directed);
   if (arcs.some((a) => a.w < 0)) return bellmanFord(nodes, arcs, source, sink);
   return dijkstra(nodes, arcs, source);
@@ -267,7 +312,7 @@ function dijkstra(
   nodes: string[],
   arcs: { u: string; v: string; w: number }[],
   source: string,
-): { dist: Record<string, number>; prev: Record<string, string | undefined>; steps: IterationStep[] } {
+): ShortestResult {
   const adj = new Map<string, { to: string; w: number }[]>();
   for (const n of nodes) adj.set(n, []);
   for (const a of arcs) adj.get(a.u)?.push({ to: a.v, w: a.w });
@@ -277,6 +322,7 @@ function dijkstra(
   const solved: string[] = [source];
   const solvedSet = new Set(solved);
   const steps: IterationStep[] = [];
+  const snaps: ShortestSnap[] = [];
   const header = ["Nodo resuelto", "Nodo no resuelto más cercano", "Distancia total", "¿Mínima?"];
   for (let n = 1; n < nodes.length; n++) {
     const cands: { from: string; to: string; total: number }[] = [];
@@ -314,10 +360,13 @@ function dijkstra(
         distancia: best.total,
         ultima_conexion: `${best.from} → ${best.node}`,
         resueltos: solved.join(", "),
+        regla:
+          "Entre los nodos aún no resueltos que están conectados a uno resuelto se elige el de menor distancia total desde el origen: esa distancia ya no puede mejorar.",
       },
     });
+    snaps.push({ dist: { ...dist }, prev: { ...prev }, newest: [best.node] });
   }
-  return { dist, prev, steps };
+  return { dist, prev, steps, snaps };
 }
 
 function bellmanFord(
@@ -325,11 +374,12 @@ function bellmanFord(
   arcs: { u: string; v: string; w: number }[],
   source: string,
   sink: string,
-): { dist: Record<string, number>; prev: Record<string, string | undefined>; steps: IterationStep[] } {
+): ShortestResult {
   const dist: Record<string, number> = Object.fromEntries(nodes.map((n) => [n, Infinity]));
   const prev: Record<string, string | undefined> = {};
   dist[source] = 0;
   const steps: IterationStep[] = [];
+  const snaps: ShortestSnap[] = [];
   for (let i = 0; i < nodes.length - 1; i++) {
     const updated: string[] = [];
     for (const { u, v, w } of arcs) {
@@ -353,6 +403,7 @@ function bellmanFord(
         regla: "Se relajan todos los arcos: si pasar por u mejora la distancia de v, se actualiza v.",
       },
     });
+    snaps.push({ dist: { ...dist }, prev: { ...prev }, newest: [...updated] });
   }
   const affected = new Set<string>();
   for (const { u, v, w } of arcs) {
@@ -373,7 +424,7 @@ function bellmanFord(
       "hay un ciclo de peso negativo que alcanza el destino; la ruta más corta no está definida (en una red no dirigida, una arista con peso negativo ya forma ese ciclo)",
     );
   }
-  return { dist, prev, steps };
+  return { dist, prev, steps, snaps };
 }
 
 function undirectedKey(a: string, b: string): string {
@@ -399,41 +450,54 @@ function mst(req: NetworksRequest): ModuleResult {
   };
   const tree: { u: string; v: string; w: number }[] = [];
   const iterations: IterationStep[] = [];
-  let step = 0;
-  for (const e of undirected) {
+  const decisions: string[] = undirected.map(() => "pendiente");
+  const touched = new Set<string>();
+  undirected.forEach((e, ii) => {
     const a = find(e.u);
     const b = find(e.v);
-    step += 1;
-    if (a !== b) {
+    const accepted = a !== b;
+    if (accepted) {
       parent[a] = b;
       tree.push(e);
-      iterations.push({
-        index: step,
-        method: "kruskal",
-        title: `Acepta ${e.u}–${e.v} con peso ${formatMetric(e.w)}`,
-        tableau: null,
-        meta: {
-          arista: `${e.u}–${e.v}`,
-          decision: "aceptada",
-          peso: e.w,
-          peso_acumulado: tree.reduce((s, x) => s + x.w, 0),
-        },
-      });
-    } else {
-      iterations.push({
-        index: step,
-        method: "kruskal",
-        title: `Rechaza ${e.u}–${e.v}: formaría un ciclo`,
-        tableau: null,
-        meta: {
-          arista: `${e.u}–${e.v}`,
-          decision: "rechazada",
-          peso: e.w,
-          peso_acumulado: tree.reduce((s, x) => s + x.w, 0),
-        },
-      });
+      touched.add(e.u);
+      touched.add(e.v);
     }
-  }
+    decisions[ii] = accepted ? "aceptada" : "rechazada";
+    const acc = tree.reduce((s, x) => s + x.w, 0);
+    iterations.push({
+      index: ii + 1,
+      method: "kruskal",
+      title: accepted
+        ? `Acepta ${e.u}–${e.v} con peso ${formatMetric(e.w)}`
+        : `Rechaza ${e.u}–${e.v}: formaría un ciclo`,
+      tableau: [
+        ["Arista", "Peso", "Decisión"],
+        ...undirected.map((x, j) => [`${x.u}–${x.v}`, x.w, decisions[j]]),
+      ],
+      meta: {
+        arista: `${e.u}–${e.v}`,
+        decision: accepted ? "aceptada" : "rechazada",
+        peso: e.w,
+        peso_acumulado: acc,
+        regla: accepted
+          ? `Las aristas se revisan de menor a mayor peso. ${e.u} y ${e.v} estaban en grupos distintos, así que unirlos no forma ciclo: se acepta.`
+          : `${e.u} y ${e.v} ya están conectados por aristas aceptadas; agregar esta arista cerraría un ciclo, así que se descarta.`,
+      },
+      view: {
+        node_tone: req.nodes.map((n) => (touched.has(n) ? "flow" : null)),
+        node_sub: req.nodes.map(() => null),
+        edge_on: undirected.map((_, j) => decisions[j] === "aceptada" && j !== ii),
+        edge_hot: undirected.map((_, j) => j === ii),
+        edge_dashed: undirected.map((_, j) => j === ii && !accepted),
+        subtitle: `Peso acumulado del árbol = ${formatMetric(acc)} · ${tree.length} de ${req.nodes.length - 1} aristas`,
+        legend: [
+          { label: accepted ? "Arista aceptada ahora" : "Arista rechazada (punteada)", tone: "crit" },
+          { label: "Aristas ya aceptadas", tone: "flow" },
+          { label: "Pendientes o rechazadas", tone: "idle" },
+        ],
+      },
+    });
+  });
   if (tree.length !== req.nodes.length - 1) {
     const groups = new Map<string, string[]>();
     for (const n of req.nodes) {
@@ -520,20 +584,20 @@ function maxFlow(req: NetworksRequest): ModuleResult {
   const res = (u: string, v: string) => residual.get(u)?.get(v) ?? 0;
 
   /** Una fila por arco (o por arista si la red no es dirigida), orientada según el flujo neto. */
-  const flowEdges = (): { u: string; v: string; cap: number; flow: number }[] => {
-    const out: { u: string; v: string; cap: number; flow: number }[] = [];
+  const flowEdges = (): { u: string; v: string; cap: number; flow: number; k: number; rev: boolean }[] => {
+    const out: { u: string; v: string; cap: number; flow: number; k: number; rev: boolean }[] = [];
     const done = new Set<string>();
-    for (const { u, v, cap } of arcs) {
+    arcs.forEach(({ u, v, cap }, k) => {
       if (!req.directed) {
-        const k = undirectedKey(u, v);
-        if (done.has(k)) continue;
-        done.add(k);
+        const key = undirectedKey(u, v);
+        if (done.has(key)) return;
+        done.add(key);
         const net = tidy(cap - res(u, v));
-        out.push(net >= 0 ? { u, v, cap, flow: net } : { u: v, v: u, cap, flow: -net });
+        out.push(net >= 0 ? { u, v, cap, flow: net, k, rev: false } : { u: v, v: u, cap, flow: -net, k, rev: true });
       } else {
-        out.push({ u, v, cap, flow: Math.max(0, tidy(cap - res(u, v))) });
+        out.push({ u, v, cap, flow: Math.max(0, tidy(cap - res(u, v))), k, rev: false });
       }
-    }
+    });
     return out;
   };
   const header = ["Arco", "Capacidad", "Flujo", "Disponible"];
@@ -541,8 +605,23 @@ function maxFlow(req: NetworksRequest): ModuleResult {
     header,
     ...flowEdges().map((e) => [`${e.u}${req.directed ? "→" : "–"}${e.v}`, e.cap, e.flow, tidy(e.cap - e.flow)]),
   ];
+  /** Flujo neto de cada arco en el sentido en que fue capturado (negativo = va al revés en una red no dirigida). */
+  const netByArc = (): number[] => arcs.map(({ u, v, cap }) => tidy(cap - res(u, v)));
 
   const iterations: IterationStep[] = [];
+  const nets: number[][] = [];
+  const paths: (string[] | null)[] = [];
+  iterations.push({
+    index: 0,
+    method: "edmonds_karp",
+    title: `Red inicial: sin flujo (se buscarán caminos de aumento de ${source} a ${sink})`,
+    tableau: snapshot(),
+    meta: {
+      regla: `Se empieza con flujo 0 en todos los arcos. En cada paso se busca por anchura (BFS) un camino de ${source} a ${sink} con capacidad disponible y se envía lo que deja pasar su arco más limitado (el cuello de botella).`,
+    },
+  });
+  nets.push(netByArc());
+  paths.push(null);
   let totalFlow = 0;
   let step = 0;
   for (;;) {
@@ -588,6 +667,8 @@ function maxFlow(req: NetworksRequest): ModuleResult {
         regla: `Se busca por anchura (BFS) el camino con capacidad disponible de ${source} a ${sink}; se envía lo que deja pasar su arco con menos capacidad disponible (el cuello de botella).`,
       },
     });
+    nets.push(netByArc());
+    paths.push(path);
   }
 
   // Corte mínimo: nodos alcanzables desde el origen en la red residual final.
@@ -623,8 +704,57 @@ function maxFlow(req: NetworksRequest): ModuleResult {
       regla: `Ya no hay camino con capacidad disponible de ${source} a ${sink}. Los nodos alcanzables (${sideS.join(", ")}) y el resto forman el corte mínimo; su capacidad (${formatMetric(cutValue)}) iguala al flujo.`,
     },
   });
+  nets.push(netByArc());
+  paths.push(null);
 
   const edgesNow = flowEdges();
+  const isCut = (e: { u: string; v: string }) =>
+    (reachable.has(e.u) && !reachable.has(e.v)) || (!req.directed && reachable.has(e.v) && !reachable.has(e.u));
+
+  // Cuadro del grafo de cada paso: flujo por arco (en el sentido del gráfico) y lo que cambió.
+  const signed = (net: number[]) => edgesNow.map((e) => (e.rev ? -net[e.k] : net[e.k]));
+  const originLabel = req.nodes.map((n) => (n === source ? "origen" : n === sink ? "destino" : null));
+  iterations.forEach((it, i) => {
+    const flows = signed(nets[i]);
+    const before = i > 0 ? signed(nets[i - 1]) : flows;
+    const last = i === iterations.length - 1;
+    const path = paths[i];
+    if (last) {
+      it.view = {
+        node_tone: req.nodes.map((n) => (reachable.has(n) ? "flow" : "idle")),
+        node_sub: originLabel,
+        edge_flow: flows,
+        edge_hot: edgesNow.map(isCut),
+        subtitle: `Flujo máximo = ${formatMetric(totalFlow)} · el corte mínimo vale ${formatMetric(cutValue)}`,
+        legend: [
+          { label: "Lado del origen en el corte", tone: "flow" },
+          { label: "Lado del destino", tone: "idle" },
+          { label: "Arco del corte mínimo", tone: "crit" },
+        ],
+      };
+      return;
+    }
+    const changed = flows.map((f, j) => Math.abs(f - before[j]) > 1e-9);
+    const cancelled = flows.map((f, j) => changed[j] && Math.abs(f) < Math.abs(before[j]) - 1e-9);
+    it.view = {
+      node_tone: req.nodes.map((n) => (path?.includes(n) ? "crit" : null)),
+      node_sub: originLabel,
+      edge_flow: flows,
+      edge_hot: changed,
+      edge_dashed: cancelled,
+      subtitle: path
+        ? `Flujo acumulado = ${formatMetric(Number(it.meta.cumulative_flow))} · camino ${path.join(" → ")}`
+        : "Todavía no circula nada",
+      legend: path
+        ? [
+            { label: "Camino de aumento (arcos que cambian)", tone: "crit" },
+            { label: "Arco con flujo", tone: "flow" },
+            { label: "Arco sin flujo (punteado)", tone: "idle" },
+          ]
+        : [{ label: "Arco sin flujo (punteado)", tone: "idle" }],
+    };
+  });
+
   const rows: unknown[][] = [];
   const variables: Record<string, number> = {};
   for (const e of edgesNow) {
@@ -650,8 +780,7 @@ function maxFlow(req: NetworksRequest): ModuleResult {
       target: e.v,
       capacity: e.cap,
       flow: e.flow,
-      min_cut:
-        (reachable.has(e.u) && !reachable.has(e.v)) || (!req.directed && reachable.has(e.v) && !reachable.has(e.u)),
+      min_cut: isCut(e),
     })),
     title: "Flujo máximo",
     subtitle: `Flujo = ${formatMetric(totalFlow)} · corte mínimo = ${formatMetric(cutValue)} · cada arco muestra flujo/capacidad`,
@@ -769,7 +898,7 @@ function transshipment(req: NetworksRequest): ModuleResult {
     return [n, b > 0 ? "oferta" : b < 0 ? "demanda" : "transbordo", b, tidy(inflow), tidy(outflow)];
   });
   const totalCost = res.cost;
-  const graphEdges = req.edges
+  const edgeInfo = req.edges
     .map((e, i) => {
       const idx = arcsOfEdge[i];
       if (!idx.length) return null;
@@ -778,14 +907,55 @@ function transshipment(req: NetworksRequest): ModuleResult {
       const back = idx.length > 1 ? tidy(res.flows[idx[1]]) : 0;
       const reversed = back > fwd;
       return {
-        source: reversed ? e.target : e.source,
-        target: reversed ? e.source : e.target,
-        cost: e.weight,
-        capacity: e.capacity,
-        flow: Math.max(fwd, back),
+        idx,
+        reversed,
+        edge: {
+          source: reversed ? e.target : e.source,
+          target: reversed ? e.source : e.target,
+          cost: e.weight,
+          capacity: e.capacity,
+          flow: Math.max(fwd, back),
+        },
       };
     })
-    .filter((e): e is NonNullable<typeof e> => e != null);
+    .filter((x): x is NonNullable<typeof x> => x != null);
+  const graphEdges = edgeInfo.map((x) => x.edge);
+  // Cuadro del grafo en cada iteración: flujo actual, arcos del árbol, el que entra y el que sale.
+  const supplyLabels = req.nodes.map((n) => {
+    const b = req.node_supply![n] ?? 0;
+    return b > 0 ? `oferta ${formatMetric(b)}` : b < 0 ? `demanda ${formatMetric(-b)}` : "transbordo";
+  });
+  res.iterations.forEach((st, i) => {
+    const fr = res.frames[i];
+    if (!fr) return;
+    const last = i === res.iterations.length - 1;
+    const net = (x: (typeof edgeInfo)[number]) => {
+      const n = fr.flow[x.idx[0]] - (x.idx.length > 1 ? fr.flow[x.idx[1]] : 0);
+      return x.reversed ? -n : n;
+    };
+    const has = (x: (typeof edgeInfo)[number], arc: number) => arc >= 0 && x.idx.includes(arc);
+    const cost = edgeInfo.reduce((a, x) => a + Math.abs(net(x)) * x.edge.cost, 0);
+    st.view = {
+      node_sub: supplyLabels,
+      edge_flow: edgeInfo.map((x) => tidy(net(x))),
+      edge_on: edgeInfo.map((x) => x.idx.some((k) => fr.tree[k])),
+      edge_hot: edgeInfo.map((x) => has(x, fr.enter) || has(x, fr.leave)),
+      edge_dashed: edgeInfo.map((x) => has(x, fr.leave)),
+      subtitle: last
+        ? `Solución óptima · costo total = ${formatMetric(tidy(cost))}`
+        : `Costo actual = ${formatMetric(tidy(cost))} (todavía mejora)`,
+      legend: last
+        ? [
+            { label: "Arco con flujo", tone: "flow" },
+            { label: "Arco sin uso (punteado)", tone: "idle" },
+          ]
+        : [
+            { label: "Arco que entra al árbol", tone: "crit" },
+            { label: "Arco del árbol básico", tone: "flow" },
+            { label: "Fuera del árbol; el que sale va punteado", tone: "idle" },
+          ],
+    };
+  });
   const graph: GraphNetwork = {
     type: "network",
     directed: true,
@@ -868,6 +1038,32 @@ function tsp(req: NetworksRequest): ModuleResult {
   const tour = tourIdx.map((i) => labels[i]);
   // Los nodos se envían en el orden del recorrido: dibujados en círculo forman un polígono sin cruces.
   const order = tourIdx.slice(0, -1);
+  if (iterations) {
+    // Cuadro de cada paso: el recorrido de ese momento; en magenta las aristas que cambiaron.
+    const labelIdx = new Map(labels.map((l, i) => [l, i]));
+    const keyOf = (a: string, b: string) => (asymmetric || a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`);
+    let before = new Set<string>();
+    iterations.forEach((st) => {
+      const rec = st.meta.recorrido as string[];
+      const pairs = rec.slice(0, -1).map((l, i) => [l, rec[i + 1]] as const);
+      st.view = {
+        node_tone: order.map(() => null),
+        node_sub: order.map(() => null),
+        edges: pairs.map(([a, b]) => ({
+          source: a,
+          target: b,
+          weight: D[labelIdx.get(a)!][labelIdx.get(b)!],
+          ...(before.has(keyOf(a, b)) ? { on: true } : { critical: true }),
+        })),
+        subtitle: `Longitud del recorrido = ${formatMetric(Number(st.meta.longitud))}`,
+        legend: [
+          { label: "Aristas nuevas en este paso", tone: "crit" },
+          { label: "Aristas que se conservan", tone: "flow" },
+        ],
+      };
+      before = new Set(pairs.map(([a, b]) => keyOf(a, b)));
+    });
+  }
   const graph: GraphNetwork = {
     type: "network",
     directed: true,

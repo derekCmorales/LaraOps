@@ -766,7 +766,7 @@ function ganttFromTables(result: ModuleResult): ModuleResult | null {
   };
 }
 
-function GraphNetworkView({ result }: { result: ModuleResult }) {
+export function GraphNetworkView({ result }: { result: ModuleResult }) {
   const graph = result.graph as Graph;
   if (!graph?.nodes?.length) return null;
 
@@ -788,6 +788,8 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
     cost?: number;
     capacity?: number;
     min_cut?: boolean;
+    on?: boolean;
+    dashed?: boolean;
   }[];
 
   const w = 640;
@@ -872,12 +874,18 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
           const a = pos.get(e.source);
           const b = pos.get(e.target);
           if (!a || !b) return null;
-          const hasFlowE = e.flow != null && e.flow > 0;
+          const hasFlowE = (e.flow != null && e.flow > 0) || Boolean(e.on);
           const crit = e.critical || e.min_cut;
           const stroke = crit ? C.pivot : hasFlowE ? C.basic : C.grid;
           // En una red no dirigida solo llevan flecha las aristas por las que circula flujo.
           const marker =
-            undirected && !hasFlowE ? undefined : crit ? "url(#arrow-crit)" : hasFlowE ? "url(#arrow-flow)" : "url(#arrow)";
+            undirected && !(e.flow != null && e.flow > 0)
+              ? undefined
+              : crit
+                ? "url(#arrow-crit)"
+                : hasFlowE
+                  ? "url(#arrow-flow)"
+                  : "url(#arrow)";
           const cap = edgeCaption(e);
           const geo = edgeGeometry(e.source, e.target, a, b, pos, edgeSet, undirected, center);
           return (
@@ -888,7 +896,7 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
                 fill="none"
                 stroke={stroke}
                 strokeWidth={crit || hasFlowE ? 2.5 : 1.5}
-                strokeDasharray={e.flow != null && !hasFlowE && !crit ? "5 4" : undefined}
+                strokeDasharray={e.dashed || (e.flow != null && !hasFlowE && !crit) ? "6 4" : undefined}
                 markerEnd={marker}
               />
               {cap && (

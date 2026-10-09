@@ -241,7 +241,7 @@ export default function ResultsTabs({ result }: Props) {
           ) : isTransport ? (
             <TransportIterations result={result} />
           ) : (
-            <IterationsViewer steps={steps} />
+            <IterationsViewer steps={steps} graphResult={result.module === "networks" ? result : undefined} />
           ),
       });
     }

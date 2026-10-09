@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ModuleResult } from "../api/client";
+import { applyIterationView, type IterationView } from "../lib/networkFrame";
 import { formatMetaValue, labelOf, methodLabel, translateTitle } from "../lib/resultLabels";
+import { GraphNetworkView } from "./ChartViews";
 
 export type IterationStepView = {
   index: number;
@@ -7,11 +10,21 @@ export type IterationStepView = {
   title: string;
   tableau?: (number | string)[][] | null;
   meta?: Record<string, unknown>;
+  view?: IterationView | null;
 };
 
 type Props = {
   steps: IterationStepView[];
+  /** Resultado de una red: cada paso con `view` dibuja su cuadro del grafo junto a la tabla. */
+  graphResult?: ModuleResult;
 };
+
+/** El grafo de un paso: el del resultado con las marcas de ese momento. */
+function StepGraph({ result, step }: { result?: ModuleResult; step: IterationStepView }) {
+  if (!result?.graph || !step.view) return null;
+  const graph = applyIterationView(result.graph, step.view);
+  return <GraphNetworkView result={{ ...result, graph }} />;
+}
 
 function cellKey(r: number, c: number) {
   return `${r}:${c}`;
@@ -66,7 +79,7 @@ function MetaPanel({ meta }: { meta: Record<string, unknown> }) {
   );
 }
 
-export default function IterationsViewer({ steps }: Props) {
+export default function IterationsViewer({ steps, graphResult }: Props) {
   const sorted = useMemo(() => [...steps].sort((a, b) => a.index - b.index), [steps]);
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -135,6 +148,7 @@ export default function IterationsViewer({ steps }: Props) {
   const leave = (meta.leave as string) || pivot?.leave;
   const z = meta.z ?? meta.relaxation_objective ?? meta.objective;
   const isLast = idx === sorted.length - 1;
+  const hasGraph = Boolean(graphResult?.graph && step.view);
 
   const isNet = NETWORK_METHODS.has(step.method);
   const panelMeta = isNet && typeof meta.regla === "string" ? { ...meta, regla: undefined } : meta;
@@ -161,6 +175,7 @@ export default function IterationsViewer({ steps }: Props) {
               Paso {si + 1}: {methodLabel(s.method)} — {translateTitle(s.title)}
               {si === sorted.length - 1 ? (NETWORK_METHODS.has(s.method) ? " · final" : " · óptimo") : ""}
             </summary>
+            {graphResult ? <StepGraph result={graphResult} step={s} /> : null}
             {s.tableau ? (
               <Tableau table={s.tableau} flash={new Set()} pivot={null} caption={`Iteración ${si + 1}`} />
             ) : (
@@ -171,6 +186,46 @@ export default function IterationsViewer({ steps }: Props) {
       </div>
     );
   }
+
+  const controls = (
+    <div className="iter-scrubber">
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => setIdx((i) => Math.max(0, i - 1))}
+        disabled={idx === 0}
+        aria-label="Iteración anterior"
+      >
+        ◀
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={sorted.length - 1}
+        value={idx}
+        onChange={(e) => setIdx(Number(e.target.value))}
+        aria-label="Barra de iteraciones"
+      />
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={() => setIdx((i) => Math.min(sorted.length - 1, i + 1))}
+        disabled={idx >= sorted.length - 1}
+        aria-label="Iteración siguiente"
+      >
+        ▶
+      </button>
+      <span className="iter-scrubber-label">
+        {idx + 1}/{sorted.length}
+      </span>
+      <button type="button" className="btn btn-ghost" onClick={() => setPlaying((p) => !p)}>
+        {playing ? "Pausar" : "Reproducir"}
+      </button>
+      <button type="button" className="btn btn-quiet" onClick={() => setStack(true)}>
+        Ver todas
+      </button>
+    </div>
+  );
 
   return (
     <div className="iter-viewer">
@@ -227,9 +282,11 @@ export default function IterationsViewer({ steps }: Props) {
       </aside>
 
       <div className="iter-main">
-        <p className="section-label" style={{ marginTop: 0 }}>
+        {hasGraph ? controls : null}
+        <p className="section-label" style={{ marginTop: hasGraph ? 14 : 0 }}>
           {translateTitle(step.title)}
         </p>
+        {hasGraph ? <StepGraph result={graphResult} step={step} /> : null}
         {step.tableau ? (
           <>
             <Tableau
@@ -246,43 +303,7 @@ export default function IterationsViewer({ steps }: Props) {
           <MetaPanel meta={panelMeta} />
         )}
 
-        <div className="iter-scrubber">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setIdx((i) => Math.max(0, i - 1))}
-            disabled={idx === 0}
-            aria-label="Iteración anterior"
-          >
-            ◀
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={sorted.length - 1}
-            value={idx}
-            onChange={(e) => setIdx(Number(e.target.value))}
-            aria-label="Barra de iteraciones"
-          />
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setIdx((i) => Math.min(sorted.length - 1, i + 1))}
-            disabled={idx >= sorted.length - 1}
-            aria-label="Iteración siguiente"
-          >
-            ▶
-          </button>
-          <span className="iter-scrubber-label">
-            {idx + 1}/{sorted.length}
-          </span>
-          <button type="button" className="btn btn-ghost" onClick={() => setPlaying((p) => !p)}>
-            {playing ? "Pausar" : "Reproducir"}
-          </button>
-          <button type="button" className="btn btn-quiet" onClick={() => setStack(true)}>
-            Ver todas
-          </button>
-        </div>
+        {hasGraph ? null : controls}
       </div>
     </div>
   );
