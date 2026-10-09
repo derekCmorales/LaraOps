@@ -159,6 +159,64 @@ function layoutCircle(
 }
 
 /* ——— Layout de red: capas topológicas o círculo ——— */
+/**
+ * Capas por distancia (BFS) desde los nodos sin arcos de entrada: en redes de flujo y de rutas
+ * evita la cadena larguísima que produce el "camino más largo" cuando hay arcos entre vecinos.
+ * Dentro de cada capa los nodos se ordenan por la posición media de sus predecesores.
+ */
+function layoutByDistance(
+  nodes: { id: string }[],
+  edges: { source: string; target: string }[],
+  w: number,
+  h: number,
+): Map<string, { x: number; y: number }> {
+  const ids = nodes.map((n) => n.id);
+  const known = new Set(ids);
+  const outs = new Map(ids.map((id) => [id, [] as string[]]));
+  const preds = new Map(ids.map((id) => [id, [] as string[]]));
+  for (const e of edges) {
+    if (!known.has(e.source) || !known.has(e.target) || e.source === e.target) continue;
+    outs.get(e.source)!.push(e.target);
+    preds.get(e.target)!.push(e.source);
+  }
+  const roots = ids.filter((id) => preds.get(id)!.length === 0);
+  const dist = new Map<string, number>();
+  const queue = (roots.length ? roots : [ids[0]]).slice();
+  queue.forEach((id) => dist.set(id, 0));
+  for (let qi = 0; qi < queue.length; qi++) {
+    for (const t of outs.get(queue[qi])!) {
+      if (!dist.has(t)) {
+        dist.set(t, dist.get(queue[qi])! + 1);
+        queue.push(t);
+      }
+    }
+  }
+  const maxD = Math.max(0, ...dist.values());
+  for (const id of ids) if (!dist.has(id)) dist.set(id, maxD + 1);
+  const layerCount = Math.max(...dist.values()) + 1;
+  const layers: string[][] = Array.from({ length: layerCount }, () => []);
+  ids.forEach((id) => layers[dist.get(id)!].push(id));
+  const rank = new Map<string, number>();
+  layers.forEach((layer, li) => {
+    if (li > 0) {
+      const score = (id: string) => {
+        const before = preds.get(id)!.filter((p) => dist.get(p)! < li && rank.has(p));
+        return before.length ? before.reduce((a, p) => a + rank.get(p)!, 0) / before.length : layer.indexOf(id);
+      };
+      layer.sort((a, b) => score(a) - score(b));
+    }
+    layer.forEach((id, j) => rank.set(id, j));
+  });
+  const padX = 48;
+  const padY = 44;
+  const pos = new Map<string, { x: number; y: number }>();
+  layers.forEach((layer, li) => {
+    const x = layerCount === 1 ? w / 2 : padX + (li * (w - 2 * padX)) / (layerCount - 1);
+    layer.forEach((id, j) => pos.set(id, { x, y: padY + ((j + 1) * (h - 2 * padY)) / (layer.length + 1) }));
+  });
+  return pos;
+}
+
 function layoutNodes(
   nodes: { id: string }[],
   edges: { source: string; target: string }[],
@@ -328,15 +386,18 @@ function edgeCaption(e: {
   qty?: number;
   label?: string;
   cost?: number;
-  capacity?: number;
+  capacity?: number | null;
 }): string {
   const parts: string[] = [];
   if (e.label) parts.push(String(e.label));
   if (e.probability != null) parts.push(`p=${fmt(e.probability)}`);
-  if (e.flow != null) parts.push(`flujo ${fmt(e.flow)}`);
-  if (e.capacity != null) parts.push(`cap. ${fmt(e.capacity)}`);
+  if (e.flow != null && e.capacity != null) parts.push(`${fmt(e.flow)}/${fmt(e.capacity)}`);
+  else {
+    if (e.flow != null) parts.push(`flujo ${fmt(e.flow)}`);
+    if (e.capacity != null) parts.push(`cap. ${fmt(e.capacity)}`);
+  }
   if (e.qty != null) parts.push(`cant. ${fmt(e.qty)}`);
-  if (e.cost != null) parts.push(`costo ${fmt(e.cost)}`);
+  if (e.cost != null) parts.push(`c ${fmt(e.cost)}`);
   if (e.weight != null && e.flow == null) parts.push(`${fmt(e.weight)}`);
   return parts.join(" · ");
 }
@@ -550,6 +611,7 @@ type NetNode = {
   value?: number;
   root?: boolean;
   supply_demand?: number;
+  tone?: "crit" | "flow" | "warn" | "idle";
   duration?: number;
   es?: number;
   ef?: number;
@@ -557,6 +619,9 @@ type NetNode = {
   lf?: number;
   slack?: number;
 };
+
+type ToneName = "crit" | "flow" | "warn" | "idle";
+const TONE_FILL: Record<ToneName, string> = { crit: C.pivot, flow: C.basic, warn: C.warn, idle: C.ink };
 
 function rectEdge(
   from: { x: number; y: number },
@@ -727,11 +792,32 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
 
   const w = 640;
   const loops = edges.some((e) => e.source === e.target);
-  const h = Math.max(loops ? 420 : 300, 40 + nodes.length * 28);
   const undirected = (graph as { directed?: boolean }).directed === false;
   // Una cadena de Markov casi nunca es un DAG: en capas los arcos se enciman, en círculo se leen.
-  const circular = nodes.length > 2 && (undirected || result.module === "markov");
-  const pos = circular ? layoutCircle(nodes, w, h, loops ? 0.27 : 0.36) : layoutNodes(nodes, edges, w, h);
+  const circular =
+    nodes.length > 2 &&
+    ((graph as { layout?: string }).layout === "circle" || undirected || result.module === "markov");
+  const h = Math.max(
+    loops ? 420 : 300,
+    40 + nodes.length * 28,
+    circular ? 360 + Math.max(0, nodes.length - 8) * 22 : 0,
+    result.module === "networks" && !circular ? 280 + nodes.length * 22 : 0,
+  );
+  // En un círculo explícito la etiqueta del nodo va hacia afuera, lejos de las flechas que llegan.
+  const outwardLabels = circular && (graph as { layout?: string }).layout === "circle";
+  const subPos = (p: { x: number; y: number }) => {
+    if (!outwardLabels) return { x: p.x, y: p.y + 38 };
+    const dx = p.x - w / 2;
+    const dy = p.y - h / 2;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: p.x + (dx / len) * 40, y: p.y + (dy / len) * 38 + 4 };
+  };
+  const customLegend = (graph as { legend?: { label: string; tone: ToneName }[] }).legend;
+  const pos = circular
+    ? layoutCircle(nodes, w, h, loops ? 0.27 : 0.36)
+    : result.module === "networks"
+      ? layoutByDistance(nodes, edges, w, h)
+      : layoutNodes(nodes, edges, w, h);
   const edgeSet = new Set(edges.map((e) => edgeKey(e.source, e.target)));
   const center = { x: w / 2, y: h / 2 };
   const title = chartTitle(graph, result.module);
@@ -750,14 +836,24 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
       subtitle={subtitle}
       ariaLabel={title}
       legend={
-        <p className="chart-legend">
-          {nodes.some((n) => n.critical) && <span className="legend-crit">● Crítico / ruta</span>}
-          {nodes.some((n) => n.absorbing) && <span className="legend-warn">● Absorbente</span>}
-          {hasFlow && <span className="legend-flow">● Con flujo</span>}
-          {hasProb && <span className="legend-flow">● Probabilidad en arcos</span>}
-          {hasQty && <span className="legend-flow">● Cantidad (BOM)</span>}
-          <span className="legend-idle">● Resto</span>
-        </p>
+        customLegend?.length ? (
+          <p className="chart-legend">
+            {customLegend.map((item) => (
+              <span key={item.label} className={`legend-${item.tone}`}>
+                ● {item.label}
+              </span>
+            ))}
+          </p>
+        ) : (
+          <p className="chart-legend">
+            {nodes.some((n) => n.critical) && <span className="legend-crit">● Crítico / ruta</span>}
+            {nodes.some((n) => n.absorbing) && <span className="legend-warn">● Absorbente</span>}
+            {hasFlow && <span className="legend-flow">● Con flujo</span>}
+            {hasProb && <span className="legend-flow">● Probabilidad en arcos</span>}
+            {hasQty && <span className="legend-flow">● Cantidad (BOM)</span>}
+            <span className="legend-idle">● Resto</span>
+          </p>
+        )
       }
     >
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" className="network-svg">
@@ -779,16 +875,20 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
           const hasFlowE = e.flow != null && e.flow > 0;
           const crit = e.critical || e.min_cut;
           const stroke = crit ? C.pivot : hasFlowE ? C.basic : C.grid;
-          const marker = undirected ? undefined : crit ? "url(#arrow-crit)" : hasFlowE ? "url(#arrow-flow)" : "url(#arrow)";
+          // En una red no dirigida solo llevan flecha las aristas por las que circula flujo.
+          const marker =
+            undirected && !hasFlowE ? undefined : crit ? "url(#arrow-crit)" : hasFlowE ? "url(#arrow-flow)" : "url(#arrow)";
           const cap = edgeCaption(e);
           const geo = edgeGeometry(e.source, e.target, a, b, pos, edgeSet, undirected, center);
           return (
             <g key={i}>
+              <title>{`${e.source} → ${e.target}${cap ? `: ${cap}` : ""}`}</title>
               <path
                 d={geo.d}
                 fill="none"
                 stroke={stroke}
                 strokeWidth={crit || hasFlowE ? 2.5 : 1.5}
+                strokeDasharray={e.flow != null && !hasFlowE && !crit ? "5 4" : undefined}
                 markerEnd={marker}
               />
               {cap && (
@@ -812,7 +912,15 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
         })}
         {nodes.map((n) => {
           const p = pos.get(n.id)!;
-          const fill = n.critical ? C.pivot : n.absorbing ? C.warn : n.root ? C.basic : C.ink;
+          const fill = n.tone
+            ? TONE_FILL[n.tone]
+            : n.critical
+              ? C.pivot
+              : n.absorbing
+                ? C.warn
+                : n.root
+                  ? C.basic
+                  : C.ink;
           const sub =
             n.kind ||
             (n.absorbing ? "absorbente" : "") ||
@@ -835,8 +943,8 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
               </text>
               {sub ? (
                 <text
-                  x={p.x}
-                  y={p.y + 38}
+                  x={subPos(p).x}
+                  y={subPos(p).y}
                   textAnchor="middle"
                   fontSize="11"
                   fill={fill}
@@ -845,7 +953,7 @@ function GraphNetworkView({ result }: { result: ModuleResult }) {
                   {sub}
                 </text>
               ) : null}
-              <title>{`${n.id}${n.value != null ? ` · valor ${fmt(n.value)}` : ""}`}</title>
+              <title>{`${n.id}${n.kind ? ` · ${n.kind}` : ""}${n.value != null ? ` · valor ${fmt(n.value)}` : ""}`}</title>
             </g>
           );
         })}
